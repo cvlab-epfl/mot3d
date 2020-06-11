@@ -60,7 +60,7 @@ void Graph::add_edge(int tail_id, int head_id, int edge_id, double weight) {
     V_[tail_id].add_successor(head_id, edge_id, weight);
     V_[head_id].add_precursor(tail_id, edge_id, weight);
 
-    if (false) {
+    if (true) {
         /******
          * for results validation only, no need to use in real application
          * ********/

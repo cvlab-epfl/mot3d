@@ -63,9 +63,6 @@ Graph init(string filename) {
     return *resG;
 }
 
-/*******
- * output the min-cost flow results
- * *****/
 void print_solution(Graph resG, vector<vector<int>> path_set, const char *outfile_name) {
     int i, j;
     int tail, head;
@@ -219,21 +216,32 @@ int main(int argc, char *argv[]) {
     cout << "The overall time is " << all_cpu_time / 1000.0 << " s\n\n";
 
     //// start validation
-    if (false) {
+    if (0) {
+        
+        cout << "1 val" << endl;
+        
         double cost_sum = 0, cost_sum_recalculate = 0;
         for (auto &&i : path_cost) {
             cost_sum += i;
         }
+        
+        cout << "2 val" << endl;
+        
         for (auto &&tmpPath:path_set) {
             double tmp_path_cost = 0;
             int tmp_edge_id;
             for (int j = 0; j < tmpPath.size() - 1; j++) {
+                cout << j << endl;
+                cout << org_graph.node_id2edge_id.size() << "--" << tmpPath.size() << endl;
                 tmp_edge_id = org_graph.node_id2edge_id[node_key(tmpPath[j + 1], tmpPath[j])];
                 tmp_path_cost += org_graph.edge_org_weights[tmp_edge_id];
                 org_graph.edge_org_weights[tmp_edge_id] *= -1;
             }
             cost_sum_recalculate += tmp_path_cost;
         }
+        
+        cout << "3 val" << endl;
+        
         unsigned long total_upt_node_num = 0;
         for (auto &&i : update_node_num) {
             total_upt_node_num += i;
@@ -247,18 +255,9 @@ int main(int argc, char *argv[]) {
     }
     printf("The number of paths: %ld, total cost is %.7f, final path cost is: %.7f.\n",
            path_cost.size(), cost_sum, path_cost[path_cost.size() - 1]);
-    //// output the number nodes updated in each iteration
-//    FILE *fp;
-//    fp = fopen("upt_size.txt", "w");
-//    for (auto&& i:update_node_num){
-//        fprintf (fp, "%ld\n", i);
-//    }
-//    fclose(fp);
-
 
     /*********write detailed flow to txt********/
-    if (argc > 3) {
-        print_solution(org_graph, path_set, "output.txt");//"output_edge_rm.txt"
-    }
+    print_solution(org_graph, path_set, argv[3]);
+    
     return 0;
 }

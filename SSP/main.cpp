@@ -60,6 +60,31 @@ Graph init(string filename){
     return *resG;
 }
 
+/*******
+ * output the min-cost flow results
+ * *****/
+void print_solution2(Graph resG, vector<vector<int>> path_set, const char *outfile_name) {
+    
+    FILE *fp;
+    fp = fopen(outfile_name, "w");
+    
+    int i, j;
+    int tail, head;
+    for (int i = 0; i < path_set.size(); i++) {
+        //fprintf(fp, "track_%d: ", i);
+        //for (int j = 1; j < path_set[i].size()-1; j=j+2) {
+        for (int j = path_set[i].size()-2; j > 0; j=j-2) {
+            //tail = path_set[i][j + 1];
+            head = path_set[i][j];
+            
+            //fprintf(fp, "f %d %d 1\n", tail + 1, head + 1);
+            fprintf(fp, "%d ", head + 1);
+        }
+        fprintf(fp, "\n");
+    }
+    fclose(fp);
+}
+
 int main(int argc, char* argv[]) {
     clock_t t_start;
     clock_t t_end;
@@ -178,6 +203,7 @@ int main(int argc, char* argv[]) {
 //    all_cpu_time = 1000.0 * (t_end-t_start) / CLOCKS_PER_SEC;
     cout << "The overall time is "<< all_cpu_time / 1000.0 << " s\n program ending start writing!\n";
 
+    print_solution2(org_graph, path_set, "output.txt");
 
     return 0;
 }
