@@ -67,6 +67,9 @@ void print_solution(Graph resG, vector<vector<int>> path_set, const char *outfil
     int i, j;
     int tail, head;
     bool *edge_visited_flag = new bool[resG.num_edges_];
+    for (i = 0; i < resG.num_edges_; i++) {
+        edge_visited_flag[i] = false;
+    }
     for (i = 0; i < path_set.size(); i++) {
         for (j = 0; j < path_set[i].size() - 1; j++) {
             tail = path_set[i][j];
@@ -78,6 +81,7 @@ void print_solution(Graph resG, vector<vector<int>> path_set, const char *outfil
     FILE *fp;
     fp = fopen(outfile_name, "w");
     for (i = 0; i < resG.num_edges_; i++) {
+        //printf("tail %d, head %d : %d \n", resG.edge_tail_head[i].first + 1, resG.edge_tail_head[i].second + 1, edge_visited_flag[i]);
         if (edge_visited_flag[i])
             fprintf(fp, "f %d %d 1\n", resG.edge_tail_head[i].first + 1, resG.edge_tail_head[i].second + 1);
         else
@@ -253,8 +257,8 @@ int main(int argc, char *argv[]) {
     for (auto &&i : path_cost) {
         cost_sum += i;
     }
-    printf("The number of paths: %ld, total cost is %.7f, final path cost is: %.7f.\n",
-           path_cost.size(), cost_sum, path_cost[path_cost.size() - 1]);
+    printf("The number of paths: %ld, total cost is %.7f, final path cost is: %.7f. #path_set %ld\n",
+           path_cost.size(), cost_sum, path_cost[path_cost.size() - 1], path_set.size());
 
     /*********write detailed flow to txt********/
     print_solution(org_graph, path_set, argv[3]);

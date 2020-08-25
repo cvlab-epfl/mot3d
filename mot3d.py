@@ -2,6 +2,7 @@ import numpy as np
 import networkx as nx
 import time
 import os
+import ast
 import subprocess
 import itertools
 import imageio
@@ -10,7 +11,8 @@ from scipy import interpolate
 from . import utils
 
 __all__ = ["euclidean", "log_p", "sigmoid", "Detection", "merge_close_detections", 
-           "build_graph", "solve_graph", "plot_trajectories", "visualisation", "smooth_trajectory"]
+           "build_graph", "solve_graph", "plot_trajectories", "visualisation", "smooth_trajectory",
+           "interpolate_trajectory"]
 
 def euclidean(p1, p2):
     return np.sqrt(sum([(i-j)**2 for i,j in zip(p1,p2)]))
@@ -109,11 +111,10 @@ def build_graph(detections, p_source_sink_weights=0.1,
         return x#-log_p(sigmoid(x, 1125, 0))
     
     def p2w_pre_post(x):
-        return log_p(sigmoid(x, 5, 0.5))
+        return log_p(sigmoid(x, 1, 0.5))
     
-    def _compute_weight(jump, dist):
-        p = np.exp(-dist**2/0.01)
-        return log_p(sigmoid(p, 10, 0))  
+    def _compute_weight(detection1, detection2, jump, dist):
+        return [-1/jump * np.exp(-dist**2/10**2)]
     
     if compute_weight is None:
         compute_weight = _compute_weight
@@ -188,10 +189,17 @@ def build_graph(detections, p_source_sink_weights=0.1,
                         if jump>0 and jump<=max_jump:
 
                             dist = euclidean(data1['detection'].pos, data2['detection'].pos)
+                            '''
                             if dist<(max_dist*jump):
                                 n_post_pre += 1
-                                w_dist = compute_weight(jump, dist)
-                                g.add_edge(n1, n2, weight=w_dist)   # post-nodes->pre-nodes
+                                w = compute_weight(data1['detection'], data2['detection'], jump, dist)
+                                g.add_edge(n1, n2, weight=w)   # post-nodes->pre-nodes
+                            '''
+                            ws = compute_weight(data1['detection'], data2['detection'], jump, dist)
+                            if ws[0]<-0.1:
+                                n_post_pre += 1
+                                g.add_edge(n1, n2, weight=np.mean(ws))   # post-nodes->pre-nodes
+                            
 
                         elif jump<=0:
                             i_resume = i
@@ -290,7 +298,11 @@ def smooth_trajectory(positions, n=1):
     
     return np.vstack(new_positions)
 
-def solve_graph(g, verbose=True):
+def _run_ssp(g, verbose=True, method='muSSP'):
+    """
+    Solve flow graph using Successive Shorthest Path (SSP) method.
+    Very fast
+    """
     
     input_filename = '/tmp/graph.txt'
     output_filename = '/tmp/output.txt'
@@ -300,7 +312,7 @@ def solve_graph(g, verbose=True):
     curr_path = os.path.dirname(os.path.abspath(__file__))
     
     # solve graph
-    cmd = os.path.join(curr_path, "muSSP/muSSP -i {} {}".format(input_filename, output_filename))
+    cmd = os.path.join(curr_path, "{}/{} -i {} {}".format(method, method, input_filename, output_filename))
     out = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
                            universal_newlines=True, shell=True)
     
@@ -313,19 +325,41 @@ def solve_graph(g, verbose=True):
     with open(output_filename, "r") as f:
         res_edges = [ [ int(xx) for xx in x.strip().split(' ')[1:]] for x in list(f)]
 
-    g3 = g.copy()
+    g_copy = g.copy()
     for s,t,r in res_edges:
         if r==0:
-            g3.remove_edge(s,t)
+            g_copy.remove_edge(s,t)
     SOURCE = list(g.nodes())[0]
     SINK = list(g.nodes())[-1]
-    data = [ track[::2][1:] for track in list(nx.all_simple_paths(g3, SOURCE, SINK))] 
+    tracks_nodes = [ track[::2][1:] for track in list(nx.all_simple_paths(g_copy, SOURCE, SINK))] 
+    
+    return tracks_nodes
+
+def _run_ilp(g, verbose=True):
+    """
+    Solve flow graph using Integer Lienar Programming method.
+    Very slow
+    """
+    from .ilp import ilp
+    
+    tracks_nodes = ilp.solve_graph_ilp(g, verbose)
+    
+    return tracks_nodes
+
+def solve_graph(g, verbose=True, method='muSSP'):
+    
+    if method in ['muSSP', 'FollowMe', 'SSP']:
+        tracks_nodes = _run_ssp(g, verbose, method)
+    elif method == 'ILP':
+        tracks_nodes = _run_ilp(g, verbose)
+    else:
+        raise ValueError("Unrecognazed method '{}'. Choose 'muSSP' or 'ILP'")
 
     # transforms the trajectories from node IDs to positions + linear interpolatation
     tracks = []
     indexes = []
     n_discarded = 0
-    for d in data:
+    for d in tracks_nodes:
         track = []
         index = []
         for n in d:
@@ -340,7 +374,7 @@ def solve_graph(g, verbose=True):
         tracks.append(track_inter.tolist())
         indexes.append(index_inter.tolist())    
     
-    return tracks, indexes
+    return tracks, indexes, tracks_nodes
             
 colors = [[255,0,0], [0,255,0], 
           [100,100,255], [255,255,0], 
@@ -356,9 +390,9 @@ def plot_trajectories(tracks):
     plt.grid()
     
         
-def visualisation(filenames, tracks, indexes, calibration, 
-                  crop=(slice(None,None), slice(None,None)), trace_length=25, 
-                  output_path="./output/sequence1", output_video="sequence1.mp4"):
+def visualisation(filenames, tracks, indexes, calibration=None, bboxes=None, 
+                  crop=(slice(None,None), slice(None,None)), trace_length=25, thickness=5, thickness_boxes=2,
+                  output_path="./output/sequence1", output_video="sequence1.mp4", fps=25):
     
     """
     Save all frames of a view with overlayed trajectories.
@@ -410,27 +444,34 @@ def visualisation(filenames, tracks, indexes, calibration,
 
                 track = np.float32(track)
                 
-                K = np.array(calibration['K'])
-                dist = np.array(calibration['dist'])
-                R = np.array(calibration['R'])
-                rvec = cv2.Rodrigues(R)[0]
-                t = np.array(calibration['t'])
+                if calibration is not None:
+                    K = np.array(calibration['K'])
+                    dist = np.array(calibration['dist'])
+                    R = np.array(calibration['R'])
+                    rvec = cv2.Rodrigues(R)[0]
+                    t = np.array(calibration['t'])
 
-                proj = cv2.projectPoints(track, rvec, t, K, dist)[0].reshape(-1,2)
+                    proj = cv2.projectPoints(track, rvec, t, K, dist)[0].reshape(-1,2)
                 
-                track = np.int32(proj)
+                    track = np.int32(proj)
                 ii = index.index(i)                
+                
 
-                for t0,t1 in zip(track[np.maximum(ii-trace_length+1,0):ii+1], track[np.maximum(ii-trace_length,1):ii]):
-                    img = cv2.line(img, tuple(t0), tuple(t1), color=color, thickness=3)
+                t_init = np.maximum(ii-trace_length+1,0)
+                for t0,t1 in zip(track[t_init:ii], track[t_init+1:ii+1]):
+                    img = cv2.line(img, tuple(t0), tuple(t1), color=color, thickness=max(1, int(thickness*0.5)))
 
-                img = cv2.circle(img, tuple(track[ii]), radius=5, color=color, thickness=-1)
+                img = cv2.circle(img, tuple(track[ii]), radius=thickness, color=color, thickness=-1)
+                
+        if bboxes is not None:
+            for xmin, ymin, xmax, ymax in bboxes[i]:
+                img = cv2.rectangle(img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=[255,0,0], thickness=thickness_boxes)
 
         imageio.imwrite(os.path.join(output_path, basename), img[crop]) 
         
     if isinstance(output_video, str):
         ext = basename.split('.')[-1]
-        cmd="ffmpeg -pattern_type glob -i '{}/*.{}' -pix_fmt yuv420p {} -y".format(output_path, ext, output_video)
+        cmd="ffmpeg -framerate {} -pattern_type glob -i '{}/*.{}' -pix_fmt yuv420p -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" {} -y".format(fps, output_path, ext, output_video)
         print(cmd)
         out = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, shell=True)
         for line in out.stdout:
