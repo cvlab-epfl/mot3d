@@ -3,141 +3,136 @@ import networkx as nx
 import time
 import os
 import ast
+import copy
 import subprocess
 import itertools
 import imageio
+import functools
 from scipy import interpolate
+import matplotlib.pyplot as plt
+from collections import Iterable
 
 from . import utils
+from .features import *
+from .types import *
 
-__all__ = ["euclidean", "log_p", "sigmoid", "Detection", "merge_close_detections", 
-           "build_graph", "solve_graph", "plot_trajectories", "visualisation", "smooth_trajectory",
-           "interpolate_trajectory"]
-
+__all__ = ["euclidean", "build_graph", "solve_graph", 
+           "plot_trajectories", "visualisation", "smooth_trajectory",
+           "interpolate_trajectory", "smooth_polynomial_2d", "plot_graph",
+           "cost_trajectory", "merge_close_points", "one_to_one_matching",
+           "concat_tracklets"]     
+        
 def euclidean(p1, p2):
-    return np.sqrt(sum([(i-j)**2 for i,j in zip(p1,p2)]))
-
-def log_p(x):
-    return -np.log(x/(1-x))
-
-def sigmoid(x, a=5, b=0):
-    return 1/(1+np.exp(-a*(x-b)))
-
-class Detection(object):
+    assert len(p1)==len(p2)
+    return np.sqrt(sum([(i-j)**2 for i,j in zip(p1,p2)]))        
+        
+def weight_distance(jump, distance, detection1=None, detection2=None,
+                    sigma_jump=3, sigma_distance=2):
     """
+    Computes the weight of the edges linking two detections
+
     Parameters
     ----------
-    pos : list
-        2d or 3d position
-    confidence : float [0..1]
-        detection confidence probability
-    data : anything (optional)
-        any other data you want to store
-    w_entry_point : float (optional)
-        weight of the edge connecting this node/detection to the source node
-    w_exit_point : float (optional)
-        weight of the edge connecting this node/detection to the sink node     
+    jump : int
+        delta time between the this and another detection
+    distance : float
+        spatial distance between this and another detection
+    detection1, detection2 : Detection
+        use these if you use a custom Detection object       
     """
-    
-    def __init__(self, pos, confidence=0.5, data=None, w_entry_point=None, w_exit_point=None):
-        self.pos = pos
-        self.confidence = confidence
-        if not isinstance(data, list) and not None:
-            self.data = [data]
-        else:
-            self.data = data
-        self.w_entry_point=w_entry_point
-        self.w_exit_point=w_exit_point
-    
-    def __str__(self):
-        return """{self.__class__.__name__}(pos={self.pos}, confidence={self.confidence}, data={self.data}, w_entry_point={self.w_entry_point}, w_exit_point={self.w_exit_point})""".format(self=self)
-    
-def mean(detections):
-    
-    confidences = [ d.confidence for d in detections]
-    positions = [ d.pos for d in detections]
-    datas = [ d.data for d in detections]
-    w_entry_points = [d.w_entry_point for d in detections if d.w_entry_point is not None]
-    w_exit_points = [d.w_exit_point for d in detections if d.w_exit_point is not None]
-    
-    pos = np.average(positions, axis=0, weights=confidences)
-    confidence = max(confidences)
-    data = list(itertools.chain(*datas))
-    w_entry_point = max(w_entry_points) if len(w_entry_points)>0 else None
-    w_exit_point = max(w_exit_points) if len(w_exit_points)>0 else None
-    
-    return Detection(pos, confidence, data, w_entry_point, w_exit_point)
+    return -np.exp(-(jump-1)**2/sigma_jump**2) * np.exp(-distance**2/sigma_distance**2)
 
-def merge_close_detections(detections, eps=0.3):
+def weight_confidence(detection):
+    """
+    Computes the weight of the edges linking the pre-node and post-node
+    """
+    return -detection.confidence      
+
+def weight_confidence_trackelts(tracklet):
+    return -0.11
+
+def merge_close_points(points, eps=0.3, return_indexes=False):
     from sklearn.cluster import DBSCAN
     
-    if len(detections)==0:
-        return detections
+    if len(points)==0:
+        return points
     
-    points = np.array([ d.pos for d in detections])
-    clu = DBSCAN(eps=eps, min_samples=1, metric='euclidean', algorithm='brute').fit(points)
+    points_ = np.array(points)
+    
+    clu = DBSCAN(eps=eps, min_samples=1, metric='euclidean', algorithm='brute').fit(points_)
 
-    new_detections = []
+    new_points = []
     for i in set(clu.labels_):
-        new_detections.append(mean([detections[j] for j in np.where(clu.labels_==i)[0]]))
-
-    return new_detections
+        if return_indexes:
+            new_points.append(np.where(clu.labels_==i)[0].tolist())
+        else:
+            new_points.append(np.mean([points_[j] for j in np.where(clu.labels_==i)], axis=1))
+    if not return_indexes:
+        new_points = np.vstack(new_points)
+    return new_points
     
-def build_graph(detections, p_source_sink_weights=0.1,
+def build_graph(detections, weight_source_sink=1,
                 max_dist=0.07, max_jump=12, verbose=True,
-                compute_weight=None):
+                weight_confidence=weight_confidence,
+                weight_distance=weight_distance):
     """
     Build the MOT graph. The edge weights are function of 
     the distance between detections.
     
     Parameters
     ----------
-    detections : list of lists of objects of type Detection
-        in order of appearance from frame 0 to N.
-    p_source_sink_weights : float, range [0..1]
-        the probability associated to edges that connect to the source and sink nodes. 
-        The edge weight is set to p_source_sink_weights*total_number_of_detections unless
-        the detection has 'p_entry_point' (or 'p_exit_point' depending if it goes to source or sink).
-        
-        The algorithm produces more trajectories if p_source_sink_weights is small, fewer otherwise.
+    detections : list of objects of type Detection or DetectionTracklet
+        list of detections in any order
+    weight_source_sink : float
+        the weights of the edges connecting the source node 
+        to all pre-nodes. The weight that connect the post-nodes 
+        to the sink nodes are all set to 0.
     max_dist : float
         an edge between two detections is created if the distance separating them is less 
         than jump*max_dist where jump is the difference in time.
     max_jump : int
         maximum difference in time between two detections
     """
-    
-    def p2w_entry_exit(x):
-        return x#-log_p(sigmoid(x, 1125, 0))
-    
-    def p2w_pre_post(x):
-        return log_p(sigmoid(x, 1, 0.5))
-    
-    def _compute_weight(detection1, detection2, jump, dist):
-        return [-1/jump * np.exp(-dist**2/10**2)]
-    
-    if compute_weight is None:
-        compute_weight = _compute_weight
+    assert isinstance(detections, (list, tuple))
+
+    if len(detections)==0:
+        return None
     
     if verbose:
         from tqdm import tqdm
         _tqdm = tqdm
     else:
-        _tqdm = lambda x: x
+        _tqdm = lambda x: x    
+        
+    is_with_tracklets = isinstance(detections[0], DetectionTracklet)
+    is_with_detections = isinstance(detections[0], Detection)
+    
+    # sort the detection based on the index
+    if is_with_tracklets:
+        compare = lambda a,b: a.head.index-b.tail.index
+        detections = sorted(detections, key=functools.cmp_to_key(compare))
+    elif is_with_detections:
+        compare = lambda a,b: a.index-b.index
+        detections = sorted(detections, key=functools.cmp_to_key(compare))
+    else:
+        raise RuntimeError("Detection object must inherit from Detection or DetectionTracklet!")     
 
     # S->pre_i: represent how likely the detection i is the initial point 
     # pre_i->post_i: cost that reflects the reward of including the detection i
     # post_i->pre_j: encodes the similarity between detection i and j
     # post_i->T: represent how likely the detection i is the terminate point
-
-    n_nodes = sum([len(x) for x in detections])
+    
+    n_detections = len(detections)
+    n_nodes = n_detections*2+2
     if verbose: 
-        print("Number of frames: {}".format(len(detections)))
-        print("Number of detections: {}".format(n_nodes))
+        if is_with_detections:
+            print("Number of frames: {}".format(len(set([d.index for d in detections]))))
+            print("Number of detections: {}".format(n_detections))
+        if is_with_tracklets:
+            print("Number of tracklets: {}".format(n_detections))            
 
     SOURCE = 1
-    SINK = int(n_nodes*2+2)
-    source_sink_weight = n_nodes*p_source_sink_weights
+    SINK = n_nodes
 
     g = nx.DiGraph()
     g.add_node(SOURCE, label='source')
@@ -146,29 +141,31 @@ def build_graph(detections, p_source_sink_weights=0.1,
 
     # creates nodes for the detections, the edge going to source and sink and the pre->post edges
     m = 0
-    for t, dets in enumerate(detections):
-        if len(dets)>0:
-            for i,d in enumerate(dets):
-                
-                # S->pre-nodes
-                g.add_node(n, detection=d, time=t, label='pre-node', idet=m)
-                if d.w_entry_point is not None:
-                    g.add_edge(SOURCE, n, weight=d.w_entry_point)
-                else:
-                    g.add_edge(SOURCE, n, weight=source_sink_weight)
-                    
-                # post-nodes->T
-                n += 1
-                g.add_node(n, detection=d, time=t, label='post-node', idet=m)
-                if d.w_exit_point is not None:
-                    g.add_edge(n, SINK, weight=d.w_exit_point)   
-                else:
-                    g.add_edge(n, SINK, weight=source_sink_weight)
-                    
-                # pre-nodes->post-nodes
-                g.add_edge(n-1, n, weight=p2w_pre_post(d.confidence))
-                n += 1
-                m += 1
+    for detection in detections:
+        
+        # S->pre-nodes
+        g.add_node(n, detection=detection, label='pre-node', idet=m)
+        if getattr(detection, "weight_source", None) is None:
+            weight = weight_source_sink
+        else:
+            weight = detection.weight_source
+        g.add_edge(SOURCE, n, weight=weight)
+        detection.pre_node = n # save a reference
+
+        # post-nodes->T
+        n += 1
+        g.add_node(n, detection=detection, label='post-node', idet=m)
+        if getattr(detection, "weight_sink", None) is None:
+            weight = 0   
+        else:
+            weight = detection.weight_sink
+        g.add_edge(n, SINK, weight=weight)
+        detection.post_node = n # save a reference       
+
+        # pre-nodes->post-nodes
+        g.add_edge(n-1, n, weight=weight_confidence(detection))
+        n += 1
+        m += 1
 
     # creates the post-pre edges 
     i_resume = 0
@@ -183,36 +180,52 @@ def build_graph(detections, p_source_sink_weights=0.1,
 
                     if data1['idet']!=data2['idet']:
 
-                        jump = data2['time']-data1['time']
-                        
+                        if is_with_tracklets:
+                            jump = data2['detection'].tail.index-data1['detection'].head.index
+                        elif is_with_detections:
+                            jump = data2['detection'].index-data1['detection'].index
+                        else:
+                            raise RuntimeError("Detection object must inherit from Detection or DetectionTracklet!")      
+                            
                         # create edges that go forward in time only
                         if jump>0 and jump<=max_jump:
 
-                            dist = euclidean(data1['detection'].pos, data2['detection'].pos)
-                            '''
-                            if dist<(max_dist*jump):
-                                n_post_pre += 1
-                                w = compute_weight(data1['detection'], data2['detection'], jump, dist)
-                                g.add_edge(n1, n2, weight=w)   # post-nodes->pre-nodes
-                            '''
-                            ws = compute_weight(data1['detection'], data2['detection'], jump, dist)
-                            if ws[0]<-0.1:
-                                n_post_pre += 1
-                                g.add_edge(n1, n2, weight=np.mean(ws))   # post-nodes->pre-nodes
+                            if max_dist is not None:
+                                if is_with_tracklets:
+                                    dist = euclidean(data1['detection'].head.position, data2['detection'].tail.position)
+                                elif is_with_detections:
+                                    dist = euclidean(data1['detection'].position, data2['detection'].position)
+                                else:
+                                    raise RuntimeError("Detection object must inherit from Detection or DetectionTracklet!")
+                            else:
+                                dist = None
                             
+                            if max_dist is None or dist<max_dist:
+                                weight = weight_distance(jump, dist, data1['detection'], data2['detection'])
+                                if weight is not None:
+                                    n_post_pre += 1
+                                    g.add_edge(n1, n2, weight=weight)   # post-nodes->pre-nodes
 
-                        elif jump<=0:
-                            i_resume = i
                         else:
-                            # the nodes are ordered w.r.t the time so when we reach
-                            # this point all the nodes that follow can be discarded as well.
-                            # For this reason, we can break hear and continue. 
-                            break
+                            # this speed things up big time
+                            # for DetectionTracklets it's more complicated...detections overlap 
+                            # As the graph with DetectionTracklets is in general very small we can scan it all 
+                            if is_with_detections: 
+                                if jump<=0:
+                                    i_resume = i
+                                else:
+                                    # the nodes are ordered w.r.t the time so when we reach
+                                    # this point all the nodes that follow can be discarded as well.
+                                    # For this reason, we can break hear and continue. 
+                                    break
 
     if verbose:
         print("Number of post-pre nodes edges created: {}".format(n_post_pre))
         
-    return g
+    if nx.has_path(g, SOURCE, SINK):
+        return g
+    else:
+        return None
 
 def save_graph(g, filename="/tmp/graph.txt"):
     
@@ -240,67 +253,10 @@ def save_graph(g, filename="/tmp/graph.txt"):
             file.write("a {} {} {:0.7f}\n".format(s, t, data['weight']))       
 
     file.close()
-
-def interpolate_trajectory(track, time):
-    """
-    Fills the missing values in the trajectory using linear interpolation
-    """
-
-    track_inter = [track[0]]
-    time_inter = [time[0]]
-    for p,t in zip(track[1:], time[1:]):
-
-        if (t-1)==time_inter[-1]:
-            track_inter.append(p)
-            time_inter.append(t)
-        else:
-            p1,p2 = track_inter[-1], p
-            t1,t2 = time_inter[-1], t
-
-            for s in range(1, t2-t1):
-                dt = s/(t2-t1)
-                if len(p1)==3:
-                    p3 = (p1[0] + (p2[0]-p1[0])*dt, 
-                            p1[1] + (p2[1]-p1[1])*dt,
-                              p1[2] + (p2[2]-p1[2])*dt)
-                elif len(p1)==2:
-                    p3 = (p1[0] + (p2[0]-p1[0])*dt, 
-                            p1[1] + (p2[1]-p1[1])*dt)                    
-                t3 = t1+s
-
-                track_inter.append(p3)
-                time_inter.append(t3)
-
-            track_inter.append(p)
-            time_inter.append(t) 
-            
-    return np.array(track_inter), np.array(time_inter)
-
-def smooth_trajectory(positions, n=1):
-    """
-    Spline smoothing
-    """
-    _positions = np.float32(positions)
-    new_positions = [_positions[:n]]
     
-    for i in range(n, len(positions)-n-1):
-        
-        window = _positions[i-n:i+n+1]
-        window += np.random.rand(*window.shape)/1e6
-        
-        tck, u = interpolate.splprep(window.T, s=100, k=1)
-
-        new_point = np.column_stack(interpolate.splev(0.5, tck))[0]
-        
-        new_positions.append(new_point)
-        
-    new_positions.append(_positions[-n-1:])
-    
-    return np.vstack(new_positions)
-
 def _run_ssp(g, verbose=True, method='muSSP'):
     """
-    Solve flow graph using Successive Shorthest Path (SSP) method.
+    Solve flow graph using Successive Shorthest Paths (SSP) method.
     Very fast
     """
     
@@ -312,26 +268,33 @@ def _run_ssp(g, verbose=True, method='muSSP'):
     curr_path = os.path.dirname(os.path.abspath(__file__))
     
     # solve graph
-    cmd = os.path.join(curr_path, "{}/{} -i {} {}".format(method, method, input_filename, output_filename))
-    out = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
-                           universal_newlines=True, shell=True)
+    cmd = [curr_path+"/{}/{}".format(method, method), "-i", input_filename, output_filename]
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
+                               universal_newlines=True)
     
-    if verbose:
-        print(cmd)
-        for line in out.stdout:
+    for line in process.stdout:
+        if verbose:
             print(line.strip())
+    process.stdout.close()
+    return_code = process.wait()
+    if return_code:
+        raise subprocess.CalledProcessError(return_code, cmd)
 
     # this recovers the trajectories from the output file. (can be optimized)
     with open(output_filename, "r") as f:
         res_edges = [ [ int(xx) for xx in x.strip().split(' ')[1:]] for x in list(f)]
 
-    g_copy = g.copy()
-    for s,t,r in res_edges:
-        if r==0:
-            g_copy.remove_edge(s,t)
-    SOURCE = list(g.nodes())[0]
-    SINK = list(g.nodes())[-1]
-    tracks_nodes = [ track[::2][1:] for track in list(nx.all_simple_paths(g_copy, SOURCE, SINK))] 
+    if len(res_edges):
+        g_copy = g.copy()
+        for s,t,r in res_edges:
+            if r==0:
+                g_copy.remove_edge(s,t)
+        nodes = g.nodes()
+        SOURCE = min(nodes)
+        SINK = max(nodes)
+        tracks_nodes = [ track[::2][1:] for track in list(nx.all_simple_paths(g_copy, SOURCE, SINK))]
+    else:
+        tracks_nodes = []
     
     return tracks_nodes
 
@@ -356,25 +319,215 @@ def solve_graph(g, verbose=True, method='muSSP'):
         raise ValueError("Unrecognazed method '{}'. Choose 'muSSP' or 'ILP'")
 
     # transforms the trajectories from node IDs to positions + linear interpolatation
-    tracks = []
-    indexes = []
+    trajectories = []
     n_discarded = 0
-    for d in tracks_nodes:
-        track = []
-        index = []
-        for n in d:
-            node = g.nodes[n]
-            track.append(node['detection'].pos)
-            index.append(node['time'])
-        track = np.array(track)
-        index = np.array(index)
+    for nodes in tracks_nodes:
+        trajectory = [g.nodes[n]['detection'] for n in nodes]
 
-        track_inter, index_inter = interpolate_trajectory(track, index)
+        #if isinstance(trajectory[0], Detection):
+        #    trajectory = interpolate_trajectory(trajectory)
 
-        tracks.append(track_inter.tolist())
-        indexes.append(index_inter.tolist())    
+        trajectories.append(trajectory)
     
-    return tracks, indexes, tracks_nodes
+    return trajectories
+
+def plot_graph(graph, node_size=100, font_size=12, 
+               node_color='y', edge_color='y', 
+               linewidths=2,
+               offset=np.array([0,0]), 
+               source_pos=None, 
+               target_pos=None, verbose=True, **kwargs):
+    
+    
+    
+    if verbose:
+        if len(graph.nodes())>500:
+            print("The graph is big. Plotting it may take a while.")
+            
+    positions = {}
+    ps = []
+    for n in graph.nodes():
+        if 'detection' in graph.nodes[n]:
+            if isinstance(graph.nodes[n]['detection'], DetectionTracklet):
+                positions[n] = np.mean([d.position[:2] for d in graph.nodes[n]['detection'].tracklet], axis=0)
+            elif isinstance(graph.nodes[n]['detection'], Detection):
+                positions[n] = graph.nodes[n]['detection'].position[:2]
+            else:
+                print(n, graph.nodes[n])
+                raise RuntimeError("Detection object must inherit from Detection or DetectionTracklet!") 
+            ps.append(positions[n])   
+    ps = np.array(ps)
+
+    xmin, ymin = ps.min(0)
+    xmax, ymax = ps.max(0)
+    w,h = (xmax-xmin), (ymax-ymin)
+
+    pos = {}
+    for n in graph.nodes():
+        node = graph.nodes[n]
+        if node['label']=='source':
+            p = source_pos if source_pos is not None else np.array([xmin-w*0.15, ymin-h*0.15])
+        elif node['label']=='sink':
+            p = target_pos if target_pos is not None else np.array([xmax+w*0.15, ymax+h*0.15])
+        elif node['label']=='pre-node':
+            p = positions[n]-np.array([w*0.025, 0])
+        elif node['label']=='post-node':
+            p = positions[n]+np.array([w*0.025, 0])
+            
+        pos[n] = p+offset
+ 
+    nx.draw_networkx(graph, pos=pos, node_size=node_size, node_color=node_color,
+                     edge_color=edge_color, font_size=font_size, **kwargs)
+    #plt.gca().invert_yaxis()
+    plt.legend()
+    
+def concat_tracklets(tracklets):
+    '''
+    Combine tracklets into a single trajectory
+    Parameters:
+    ----------
+    tracklets : list of lists of objects of type Detection
+    
+    Returns:
+    -------
+    trajectory: list of object of type Detection
+    '''
+    return list(itertools.chain(*[d.tracklet for d in tracklets]))
+    
+def interpolate_(vector1, t1, vector2, t2):
+    from scipy.interpolate import interp1d
+    
+    t_new = np.arange(t1+1, t2)
+    f = interp1d(np.array([t1,t2]), np.array([vector1,vector2]).T)
+    vector_new = f(t_new).T
+    
+    return vector_new, t_new   
+
+def interpolate_trajectory(trajectory, features=False):
+    """
+    Fills the missing values in the trajectory using linear interpolation
+    
+    Note: this functions only interpolates missing detections.
+    In other words only if there are jumps in the indexes.
+    If you want to interpolate missing features you have to delete the detections first.
+    """
+    new_positions, new_indexes, new_features = None, None, None
+    
+    DetectionType = type(trajectory[0])
+
+    new_trajectory = [trajectory[0]]
+    for curr in trajectory[1:]:
+
+        past = new_trajectory[-1]
+
+        if curr.index-past.index==1:
+            new_trajectory.append(curr)
+        else:
+
+            new_positions, new_indexes = interpolate_(past.position, past.index,
+                                                      curr.position, curr.index)
+
+            if features:
+                new_features = {}
+                for feature in features:
+                    v1 = np.array(past.features[feature])
+                    v2 = np.array(curr.features[feature])
+                    shape = (-1,)+v1.shape
+                    new_features[feature] = interpolate_(v1.ravel(), past.index,
+                                                         v2.ravel(), curr.index)[0].reshape(shape)
+
+            for i in range(len(new_indexes)):
+                features_ = {}
+                if features:
+                    for feature in features:
+                        features_[feature] = new_features[feature][i].tolist()
+                        
+                new_trajectory.append(DetectionType(index=int(new_indexes[i]), 
+                                                    position=new_positions[i], 
+                                                    features=features_,
+                                                    confidence=None, 
+                                                    datetime=None))
+
+            new_trajectory.append(curr)
+            
+    return new_trajectory
+
+def smooth_trajectory(trajectory, n=1, s=100, k=3):
+    """
+    Spline smoothing
+    """
+    trajectory_ = copy.deepcopy(trajectory)
+    
+    for i in range(n, len(trajectory_)-n-1):
+        
+        window = np.array([detection.position for detection in trajectory[i-n:i+n+1]])
+        window += np.random.rand(*window.shape)/1e5
+        
+        tck, u = interpolate.splprep(window.T, s=s, k=k)
+
+        new_position = np.column_stack(interpolate.splev(u[n], tck))[0]
+        
+        trajectory_[i].position = list(new_position)
+    
+    return trajectory_
+
+def uniform_param(P):
+    """
+    Uniform parametrization for splines
+    """
+    u = np.linspace(0, 1, len(P))
+    return u
+
+def generate_param(P, alpha):
+    n = len(P)
+    u = np.zeros(n)
+    u_sum = 0
+    for i in range(1,n):
+        u_sum += np.linalg.norm(P[i,:]-P[i-1,:])**alpha
+        u[i] = u_sum
+    
+    return u/max(u)
+    
+def chordlength_param(P):
+    """
+    Chordlength parametrization for splines
+    """
+    u = generate_param(P, alpha=1.0)
+    return u
+    
+def centripetal_param(P):
+    """
+    Centripetal parametrization for splines
+    """
+    u = generate_param(P, alpha=0.5)
+    return u
+
+def smooth_polynomial_2d(trajectory, degree=3):
+    """
+    Fits a trajectory with a polynomial function then 
+    returns a new one with equal length segments.
+    Work for 2D trajectories only.
+    This function is suited for removing noise from short trajectories (tracklets).
+    """
+    positions = np.array([detection.position for detection in trajectory])
+    
+    # fit polynomial
+    p = np.polyfit(positions[:,0], positions[:,1], degree)
+
+    x = np.linspace(positions[0,0], positions[-1,0], len(positions))
+    y = np.polyval(p, x)
+
+    # get equal length segments
+    u = uniform_param(positions)
+    tck, ub = interpolate.splprep([x,y], s=0, k=2, u=u)
+
+    u = np.linspace(0,1,len(positions))
+    x2,y2 = interpolate.splev(u, tck)
+    
+    for detection,new_position in zip(trajectory,x2,y2):
+        detection.position = new_position
+    
+    return trajectory
             
 colors = [[255,0,0], [0,255,0], 
           [100,100,255], [255,255,0], 
@@ -382,13 +535,44 @@ colors = [[255,0,0], [0,255,0],
           [225,225,225], [0,0,0],
           [128,128,128], [50,128,50]]+[np.random.randint(0,255,3).tolist() for _ in range(200)]    
     
-def plot_trajectories(tracks):
+def plot_trajectories(trajectories, axis=(0,1), linewidth=2, nodesize=7, 
+                      display_time=False, fontsize=8, display_time_every=1, filter_index=None):
     import matplotlib.pyplot as plt
     plt.figure()
-    for track,c in zip(tracks, colors):
-        plt.plot(np.array(track)[:,0], np.array(track)[:,1], '.-', color=(c[0]/255,c[1]/255, c[2]/255), linewidth=2)
-    plt.grid()
-    
+    for track,color in zip(trajectories, colors):
+        color = tuple(c/255.0 for c in color)
+        positions = []
+        times = []
+        for detection in track:
+            
+            if isinstance(detection, DetectionTracklet):
+                positions_ = [[d.position[i] for i in axis] for d in detection.tracklet]
+                time_ = [d.index for d in detection.tracklet]
+            elif isinstance(detection, Detection):
+                positions_ = [[detection.position[i] for i in axis]]
+                time_ = [detection.index]
+            else:
+                raise RuntimeError("Detection object must inherit from Detection or DetectionTracklet!")            
+            
+            if filter_index is None:
+                for p,t in zip(positions_, time_):
+                    positions.append(p)
+                    times.append(t)    
+            else:
+                for p,t in zip(positions_, time_):
+                    if t >= filter_index[0] and t<filter_index[1]:
+                        positions.append(p)
+                        times.append(t) 
+
+        if len(positions):
+            positions = np.array(positions)[:,axis]
+            times = np.array(times)
+            plt.plot(positions[:,0], positions[:,1], '.-', color=color, linewidth=linewidth, markersize=nodesize)
+            if display_time:
+                for (x,y),time in zip(positions[::display_time_every], times[::display_time_every]):
+                    plt.text(x,y, str(time), color=color, fontsize=fontsize, 
+                             bbox={'facecolor': 'black', 'alpha': 0.8, 'pad': 1})
+    plt.grid()   
         
 def visualisation(filenames, tracks, indexes, calibration=None, bboxes=None, 
                   crop=(slice(None,None), slice(None,None)), trace_length=25, thickness=5, thickness_boxes=2,
@@ -471,9 +655,99 @@ def visualisation(filenames, tracks, indexes, calibration=None, bboxes=None,
         
     if isinstance(output_video, str):
         ext = basename.split('.')[-1]
-        cmd="ffmpeg -framerate {} -pattern_type glob -i '{}/*.{}' -pix_fmt yuv420p -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" {} -y".format(fps, output_path, ext, output_video)
+        cmd="ffmpeg -framerate {} -pattern_type glob -i '{}/*.{}' -pix_fmt yuv420p -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" {} -vcodec h264 -y".format(fps, output_path, ext, output_video)
         print(cmd)
         out = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, shell=True)
         for line in out.stdout:
             print(line.strip())   
     
+def cost_trajectory(trajectory, weight_source=0, weight_sink=0,
+                    weight_confidence=weight_confidence,
+                    weight_distance=weight_distance):
+    """
+    Computes the cost of a trajectory
+    
+    Parameters
+    ----------
+    trajectory : list of object of type Detection
+        sequence of detections
+    weight_source : float
+        weight of the edge linking the first detection to the source node
+    weight_sink : float
+        weight of the edge linking the last detection to the sink node
+    """
+    costs = [weight_source]
+    for detection1, detection2 in zip(trajectory[:-1], trajectory[1:]):  
+        jump = detection2.index-detection1.index
+        dist = euclidean(detection1.position, detection2.position)
+        
+        costs.append(weight_confidence(detection1))
+        costs.append(weight_distance(jump, dist, detection1, detection2))
+        
+    costs.append(weight_confidence(trajectory[-1]))    
+    costs.append(weight_sink)
+    
+    return sum(costs)
+
+def one_to_one_matching(detections1, detections2, weight_source_sink=0.0,
+                        max_dist=0.07, max_jump=12, verbose=True,
+                        weight_confidence=weight_confidence,
+                        weight_distance=weight_distance):
+    
+    if len(detections1)==0 or len(detections2)==0:
+        return [None]*len(detections2), [None]*len(detections2)
+    
+    detections1_ = copy.deepcopy(detections1)
+    detections2_ = copy.deepcopy(detections2)
+                        
+    def weight_distance_mod(jump, distance, detection1, detection2):
+        jump = np.abs(detection2.index_orig-detection1.index_orig)
+        if jump>max_jump:
+            return None # since we have forced the indexes to be 0 or 1 we handle the >max_jump statement here
+        return weight_distance(jump, distance, detection1, detection2)
+    
+    detections_ssp = []
+    for i, d in enumerate(detections1_):
+        if isinstance(d, DetectionTracklet):
+            d.index_orig = d.head.index
+            d.head.index = 0 # we force the index to be 0 and 1 so that detections remain in the correct order
+        else:
+            d.index_orig = d.index
+            d.index = 0 # we force the index to be 0 and 1 so that detections remain in the correct order
+        d.weight_sink = 9999
+        d.i = i
+        detections_ssp.append(d)
+    for j, d in enumerate(detections2_):
+        if isinstance(d, DetectionTracklet):
+            d.index_orig = d.tail.index
+            d.tail.index = 1 # we force the index to be 0 and 1 so that detections remain in the correct order
+        else:
+            d.index_orig = d.index
+            d.index = 1 # we force the index to be 0 and 1 so that detections remain in the correct order
+        d.weight_source = 9999
+        d.i = j
+        detections_ssp.append(d)
+
+    g = build_graph(detections_ssp, 
+                    weight_source_sink=weight_source_sink,
+                    max_dist=max_dist, 
+                    max_jump=1, 
+                    verbose=verbose, 
+                    weight_distance=weight_distance_mod,
+                    weight_confidence=weight_confidence)
+    if g is None:
+        trajectories = [] 
+    else:
+        trajectories = solve_graph(g, verbose=verbose)   
+                 
+    matches1 = [None]*len(detections1)
+    matches2 = [None]*len(detections2)
+    for trajectory in trajectories:
+        if len(trajectory)==1:
+            continue
+        elif len(trajectory)>2:
+            raise RuntimeError("resulting trjectory contains more then two detections!")
+        matches1[trajectory[0].i] = trajectory[1].i
+        matches2[trajectory[1].i] = trajectory[0].i
+                        
+    return matches1, matches2

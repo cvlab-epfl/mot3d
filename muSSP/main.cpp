@@ -63,7 +63,7 @@ Graph init(string filename) {
     return *resG;
 }
 
-void print_solution(Graph resG, vector<vector<int>> path_set, const char *outfile_name) {
+void print_solution(Graph resG, vector<vector<int>> path_set, const char *outfile_name, double cost_sum) {
     int i, j;
     int tail, head;
     bool *edge_visited_flag = new bool[resG.num_edges_];
@@ -80,12 +80,14 @@ void print_solution(Graph resG, vector<vector<int>> path_set, const char *outfil
     }
     FILE *fp;
     fp = fopen(outfile_name, "w");
-    for (i = 0; i < resG.num_edges_; i++) {
-        //printf("tail %d, head %d : %d \n", resG.edge_tail_head[i].first + 1, resG.edge_tail_head[i].second + 1, edge_visited_flag[i]);
-        if (edge_visited_flag[i])
-            fprintf(fp, "f %d %d 1\n", resG.edge_tail_head[i].first + 1, resG.edge_tail_head[i].second + 1);
-        else
-            fprintf(fp, "f %d %d 0\n", resG.edge_tail_head[i].first + 1, resG.edge_tail_head[i].second + 1);
+    if(cost_sum<0){
+        for (i = 0; i < resG.num_edges_; i++) {
+            //printf("tail %d, head %d : %d \n", resG.edge_tail_head[i].first + 1, resG.edge_tail_head[i].second + 1, edge_visited_flag[i]);
+            if (edge_visited_flag[i])
+                fprintf(fp, "f %d %d 1\n", resG.edge_tail_head[i].first + 1, resG.edge_tail_head[i].second + 1);
+            else
+                fprintf(fp, "f %d %d 0\n", resG.edge_tail_head[i].first + 1, resG.edge_tail_head[i].second + 1);
+        }
     }
     fclose(fp);
 }
@@ -254,14 +256,15 @@ int main(int argc, char *argv[]) {
                path_cost.size(), cost_sum, cost_sum_recalculate, path_cost[path_cost.size() - 1]);
     }
     double cost_sum = 0;
-    for (auto &&i : path_cost) {
-        cost_sum += i;
+    for (int i = 0; i < path_cost.size(); i++) {
+        cost_sum += path_cost[i];
+        printf("cost path #%d %.7f\n", i+1, path_cost[i]);
     }
     printf("The number of paths: %ld, total cost is %.7f, final path cost is: %.7f. #path_set %ld\n",
            path_cost.size(), cost_sum, path_cost[path_cost.size() - 1], path_set.size());
 
     /*********write detailed flow to txt********/
-    print_solution(org_graph, path_set, argv[3]);
+    print_solution(org_graph, path_set, argv[3], cost_sum);
     
     return 0;
 }
