@@ -20,7 +20,7 @@ __all__ = ["euclidean", "build_graph", "solve_graph",
            "plot_trajectories", "visualisation", "smooth_trajectory",
            "interpolate_trajectory", "smooth_polynomial_2d", "plot_graph",
            "cost_trajectory", "merge_close_points", "one_to_one_matching",
-           "concat_tracklets"]     
+           "concat_tracklets", "graph_to_text", "save_graph"]     
         
 def euclidean(p1, p2):
     assert len(p1)==len(p2)
@@ -226,67 +226,60 @@ def build_graph(detections, weight_source_sink=1,
         return g
     else:
         return None
-
-def save_graph(g, filename="/tmp/graph.txt"):
     
-    file = open(filename, "w") 
-    file.write("p min {} {}\n".format(len(g), len(g.edges())))
+def graph_to_text(g):
+    
+    graph_as_text = [] 
+    graph_as_text.append("p min {} {}".format(len(g), len(g.edges())))
 
-    file.write("c ------ source->pre-nodes ------\n")
+    graph_as_text.append("c ------ source->pre-nodes ------")
     for s,t,data in g.edges(data=True):
         if g.nodes[s]['label']=='source' and g.nodes[t]['label']=='pre-node':
-            file.write("a {} {} {:0.7f}\n".format(s, t, data['weight']))
+            graph_as_text.append("a {} {} {:0.7f}".format(s, t, data['weight']))
 
-    file.write("c ------ post-nodes->sink ------\n")    
+    graph_as_text.append("c ------ post-nodes->sink ------")  
     for s,t,data in g.edges(data=True):
         if g.nodes[s]['label']=='post-node' and g.nodes[t]['label']=='sink':
-            file.write("a {} {} {:0.7f}\n".format(s, t, data['weight']))        
+            graph_as_text.append("a {} {} {:0.7f}".format(s, t, data['weight']))      
 
-    file.write("c ------ pre-node->post-nodes ------\n")    
+    graph_as_text.append("c ------ pre-node->post-nodes ------")
     for s,t,data in g.edges(data=True):
         if g.nodes[s]['label']=='pre-node' and g.nodes[t]['label']=='post-node':
-            file.write("a {} {} {:0.7f}\n".format(s, t, data['weight']))
+            graph_as_text.append("a {} {} {:0.7f}".format(s, t, data['weight']))
 
-    file.write("c ------ post-node->pre-nodes ------\n")    
+    graph_as_text.append("c ------ post-node->pre-nodes ------") 
     for s,t,data in g.edges(data=True):
         if g.nodes[s]['label']=='post-node' and g.nodes[t]['label']=='pre-node':
-            file.write("a {} {} {:0.7f}\n".format(s, t, data['weight']))       
+            graph_as_text.append("a {} {} {:0.7f}".format(s, t, data['weight']))   
 
-    file.close()
+    return graph_as_text
     
-def _run_ssp(g, verbose=True, method='muSSP'):
+def save_graph(graph_as_text, filename="/tmp/graph.txt"):
+    
+    fd = os.open(filename, os.O_RDWR|os.O_CREAT|os.O_SYNC|os.O_TRUNC) 
+    
+    for string in graph_as_text:
+        os.write(fd, str.encode(string+"\n"))    
+
+    os.close(fd)    
+    
+def _run_ssp(g, verbose=1, method='muSSP'):
     """
     Solve flow graph using Successive Shorthest Paths (SSP) method.
     Very fast
     """
     
-    input_filename = '/tmp/graph.txt'
-    output_filename = '/tmp/output.txt'
+    graph_as_text = graph_to_text(g)
     
-    save_graph(g, input_filename)
-    
-    curr_path = os.path.dirname(os.path.abspath(__file__))
-    
-    # solve graph
-    cmd = [curr_path+"/{}/{}".format(method, method), "-i", input_filename, output_filename]
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
-                               universal_newlines=True)
-    
-    for line in process.stdout:
-        if verbose:
-            print(line.strip())
-    process.stdout.close()
-    return_code = process.wait()
-    if return_code:
-        raise subprocess.CalledProcessError(return_code, cmd)
+    if method=='muSSP':
+        from .solvers.wrappers.muSSP import wrapper 
+        output = wrapper.solve(graph_as_text, int(verbose))
+    else:
+        raise NotImplementedError(method)
 
-    # this recovers the trajectories from the output file. (can be optimized)
-    with open(output_filename, "r") as f:
-        res_edges = [ [ int(xx) for xx in x.strip().split(' ')[1:]] for x in list(f)]
-
-    if len(res_edges):
+    if len(output):
         g_copy = g.copy()
-        for s,t,r in res_edges:
+        for s,t,r in output:
             if r==0:
                 g_copy.remove_edge(s,t)
         nodes = g.nodes()
@@ -337,8 +330,6 @@ def plot_graph(graph, node_size=100, font_size=12,
                offset=np.array([0,0]), 
                source_pos=None, 
                target_pos=None, verbose=True, **kwargs):
-    
-    
     
     if verbose:
         if len(graph.nodes())>500:
@@ -538,7 +529,7 @@ colors = [[255,0,0], [0,255,0],
 def plot_trajectories(trajectories, axis=(0,1), linewidth=2, nodesize=7, 
                       display_time=False, fontsize=8, display_time_every=1, filter_index=None):
     import matplotlib.pyplot as plt
-    plt.figure()
+    #plt.figure()
     for track,color in zip(trajectories, colors):
         color = tuple(c/255.0 for c in color)
         positions = []
@@ -571,7 +562,11 @@ def plot_trajectories(trajectories, axis=(0,1), linewidth=2, nodesize=7,
             if display_time:
                 for (x,y),time in zip(positions[::display_time_every], times[::display_time_every]):
                     plt.text(x,y, str(time), color=color, fontsize=fontsize, 
-                             bbox={'facecolor': 'black', 'alpha': 0.8, 'pad': 1})
+                             bbox={'facecolor': 'grey', 'alpha': 0.8, 'pad': 1})
+                # making sure we add the last one too
+                for (x,y),time in zip(positions[[-1]], times[[-1]]):
+                    plt.text(x,y, str(time), color=color, fontsize=fontsize, 
+                             bbox={'facecolor': 'grey', 'alpha': 0.8, 'pad': 1})
     plt.grid()   
         
 def visualisation(filenames, tracks, indexes, calibration=None, bboxes=None, 
