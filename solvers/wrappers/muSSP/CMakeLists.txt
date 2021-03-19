@@ -18,7 +18,7 @@ endif()
 if ( NOT PYTHON_MANUAL )
   find_package(PythonInterp 3)
   find_package(PythonLibs 3 REQUIRED)
-  find_package(Boost COMPONENTS python${PYTHON_VERSION_MAJOR} aa)
+  find_package(Boost COMPONENTS python${PYTHON_VERSION_MAJOR})
 else()
   message("Manually add python, boost-python and boost-numpy..")
 
