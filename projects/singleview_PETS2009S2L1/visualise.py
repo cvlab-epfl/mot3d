@@ -164,6 +164,7 @@ def main(config_file='',
          fps=20,
          clear_output_folder=True,
          use_tracklets=False,
+         use_smoothed=True,
          view=None):
     
     __c__ = utils.yaml_read(config_file)
@@ -189,7 +190,10 @@ def main(config_file='',
     
     scene = Scene()
     basename_config = os.path.splitext(os.path.basename(config_file))[0]
-    output_file = os.path.join(output_path, "results_{}.pickle".format(basename_config))
+    if use_smoothed:
+        output_file = os.path.join(output_path, "results_smooth_{}.pickle".format(basename_config))
+    else:
+        output_file = os.path.join(output_path, "results_{}.pickle".format(basename_config))
     scene.load(output_file)
     
     if use_tracklets:
@@ -198,8 +202,12 @@ def main(config_file='',
         trajs = list(scene.completed.values())+list(scene.active.values())
 
     mot3d.plot_trajectories(trajs, display_time=True, display_time_every=10)
-    plt.savefig(os.path.join(output_path, "plot_trajectories_{}.jpg".format(basename_config)), 
-                bbox_inches='tight')
+    if use_smoothed:
+        plt.savefig(os.path.join(output_path, "plot_trajectories_smooth_{}.jpg".format(basename_config)), 
+                    bbox_inches='tight')
+    else:
+        plt.savefig(os.path.join(output_path, "plot_trajectories_{}.jpg".format(basename_config)), 
+                    bbox_inches='tight')                
 
     filenames = [feeder.get_filename_image(i) for i in range(len(feeder))]
     indexes = list(range(len(filenames)))
@@ -210,8 +218,13 @@ def main(config_file='',
         output_frames=os.path.join(output_path, "{}_tracklets".format(basename_config))
         output_video=os.path.join(output_path, "{}_tracklets.mp4".format(basename_config))
     else:
-        output_frames=os.path.join(output_path, "{}".format(basename_config))
-        output_video=os.path.join(output_path, "{}.mp4".format(basename_config))
+        if use_smoothed:
+            output_frames=os.path.join(output_path, "{}_smooth".format(basename_config))
+            output_video=os.path.join(output_path, "{}_smooth.mp4".format(basename_config))
+        else:
+            output_frames=os.path.join(output_path, "{}".format(basename_config))
+            output_video=os.path.join(output_path, "{}.mp4".format(basename_config))            
+            
     utils.mkdir(output_frames)
     
     if clear_output_folder:
@@ -248,6 +261,7 @@ if __name__ == "__main__":
     parser.add_argument("--fps", "-fps", type=float, default=25)
     parser.add_argument("--clear_output_folder", "-rm", type=str2bool, default='yes')
     parser.add_argument("--use_tracklets", action="store_true", required=False)
+    parser.add_argument("--use_smoothed", action="store_true", required=False)
     parser.add_argument("--view", "-v", type=str, default=None, required=False)
 
     args = parser.parse_args()

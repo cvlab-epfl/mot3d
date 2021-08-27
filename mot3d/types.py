@@ -25,7 +25,7 @@ class Detection(object):
         
 class Detection2D(Detection):
     
-    def __init__(self, index, position, confidence=0.5, id=None, 
+    def __init__(self, index, position=None, confidence=0.5, id=None, 
                  view=None, color_histogram=None, bbox=None):    
         super(Detection2D, self).__init__(index, confidence, id)
         self.position = position
@@ -35,7 +35,7 @@ class Detection2D(Detection):
 
 class Detection3D(Detection):
     
-    def __init__(self, index, position, confidence=0.5, id=None, detections_2d={}):    
+    def __init__(self, index, position=None, confidence=0.5, id=None, detections_2d={}):    
         super(Detection3D, self).__init__(index, confidence, id)
         self.position = position
         self.detections_2d = detections_2d
@@ -89,7 +89,8 @@ def _check(tracklet, type):
 
 class DetectionTracklet2D(DetectionTracklet):
     
-    def __init__(self, tracklet, confidence=0.5, window=None, view=None):
+    def __init__(self, tracklet, confidence=0.5, id=None, window=None, view=None,
+                 head_access_point=False, tail_access_point=False):
         super(DetectionTracklet2D, self).__init__(tracklet, confidence, id)
         
         _check(tracklet, Detection2D)
@@ -109,7 +110,7 @@ class DetectionTracklet2D(DetectionTracklet):
                                 color_histogram=color_histogram, bbox=bbox)
         self.head.indexes = indexes
         self.head.positions = positions
-        self.head.access_point = False
+        self.head.access_point = head_access_point
         
         # tail: the part of the trajectory that is the oldest in time
         if window is not None:
@@ -123,7 +124,7 @@ class DetectionTracklet2D(DetectionTracklet):
                                 color_histogram=color_histogram, bbox=bbox)
         self.tail.indexes = indexes
         self.tail.positions = positions  
-        self.tail.access_point = False
+        self.tail.access_point = tail_access_point
         
 def _extract_features_3d(tracklet):
     
@@ -136,7 +137,8 @@ def _extract_features_3d(tracklet):
         
 class DetectionTracklet3D(DetectionTracklet):
     
-    def __init__(self, tracklet, confidence=0.5, window=None):
+    def __init__(self, tracklet, confidence=0.5, id=None, window=None,
+                 head_access_point=False, tail_access_point=False):
         super(DetectionTracklet3D, self).__init__(tracklet, confidence, id)
         
         _check(tracklet, Detection3D)
@@ -162,7 +164,7 @@ class DetectionTracklet3D(DetectionTracklet):
         self.head = Detection3D(indexes[-1], positions[-1])
         self.head.indexes = indexes
         self.head.positions = positions
-        self.head.access_point = False
+        self.head.access_point = head_access_point
             
         # tail: the part of the trajectory that is the oldest in time
         if window is not None:
@@ -175,4 +177,13 @@ class DetectionTracklet3D(DetectionTracklet):
         self.tail = Detection3D(indexes[0], positions[0])
         self.tail.indexes = indexes
         self.tail.positions = positions 
-        self.tail.access_point = False
+        self.tail.access_point = tail_access_point
+        
+'''
+This is an object that it is used as a pointer to a trajectory stored somewhere else.
+If T is a trajectory composed of detections: T=[d1, d2, t_view1, ..., dn]
+t_view1 is a piece (a chain of one detection or multiple detections) of this trajectory. 
+'''
+class TrajectoryView(object):
+    def __init__(self, id_view=None):
+        self.id_view = id_view        

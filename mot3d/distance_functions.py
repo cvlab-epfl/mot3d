@@ -40,13 +40,13 @@ def bbox_size_similarity(bbox1, bbox2):
     return 1-(np.abs(h1-h2)/(np.maximum(h1,h2)+1e-12)+\
               np.abs(w1-w2)/(np.maximum(w1,w2)+1e-12))/2
 
-def linear_motion(idxs1, pts1, idxs2, pts2, sigma_motion=0.3):
+def linear_motion(idxs1, pts1, idxs2, pts2):
     
-    assert idxs2[0]>idxs1[-1], "idxs2[0]={} idxs1[-1]={}".format(idxs2[0],idxs1[-1])
+    assert idxs2[0]>idxs1[-1], "idxs2[0]={} idxs1[-1]={} tracklet2 cannot be more recent than tracklet1!".format(idxs2[0],idxs1[-1])
     
     def linear_deviation(pts1, idxs1, pts2, idxs2):
         try:
-            polys =  np.polyfit(idxs1, pts1, 1)
+            polys = np.polyfit(idxs1, pts1, 1)
         except:
             print("np.polyfit error: idxs1={}, pts1={}".format(idxs1, pts1))
             raise

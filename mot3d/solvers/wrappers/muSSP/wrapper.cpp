@@ -85,13 +85,14 @@ Graph* init(p::list graph_as_text, int verbose) {
 
 p::list make_output(Graph* resG, vector<vector<int>> path_set, double cost_sum) {
     /* for some reason path_set doesn't contain the actual (final) shortest paths.
-    Instead, (after some processing) it contains the information of which edge is active in the graph.
+    It contains the information of which edge is active in the graph instead.
     This function outputs these edges.
+    !! some edges may be flipped !!
     The next step would be to extract the subgraph composed of only active edges and then compute all paths
     connecting source to sink. (this is done in the python code)
     */
     int i, j;
-    int tail, head, temp, edge_id;
+    int tail, head, edge_id;
     std::unordered_map<size_t, int> m;
     
     std::vector<bool> edge_visited;   
@@ -100,12 +101,6 @@ p::list make_output(Graph* resG, vector<vector<int>> path_set, double cost_sum) 
         for (j = 0; j < path_set[i].size() - 1; j++) {
             head = path_set[i][j];
             tail = path_set[i][j + 1];
-            
-            if (tail>head) {
-                temp = tail;
-                tail = head;
-                head = temp;                
-            }
             
             if (m.find(node_key(tail, head)) == m.end()) {
                 // not found condition
@@ -124,12 +119,6 @@ p::list make_output(Graph* resG, vector<vector<int>> path_set, double cost_sum) 
             head = path_set[i][j];
             tail = path_set[i][j - 1];  
             
-            if (tail>head) {
-                temp = tail;
-                tail = head;
-                head = temp;                
-            }      
-
             edge_id = m[node_key(tail, head)];
             if (edge_visited[edge_id]) {
                 edges.append(p::make_tuple(tail+1, head+1));

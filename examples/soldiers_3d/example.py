@@ -78,6 +78,7 @@ if __name__=="__main__":
     weight_distance_t = lambda t1, t2: wf.weight_distance_trackelts_3d(t1, t2, 
                                                                        sigma_color_histogram=0.3, sigma_motion=3, alpha=0.7,
                                                                        cutoff_motion=0.1, cutoff_appearance=0.1,
+                                                                       max_distance=None,
                                                                        use_color_histogram=False)
     
     weight_confidence_t = lambda t: wf.weight_confidence_tracklets_3d(t, mul=1, bias=0)

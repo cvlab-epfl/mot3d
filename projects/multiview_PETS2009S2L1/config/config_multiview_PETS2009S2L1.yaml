@@ -49,11 +49,11 @@ tracking:
     access_points: "./overlapping_fov/overlapping_fov_n3.json"
 
     detections:
-        weight_source_sink: 5
+        weight_source_sink: 3
         max_jump: 4
         verbose: true
         weight_distance:       
-            sigma_distance: 1000
+            sigma_distance: 500
             sigma_jump: 4
             sigma_color_histogram: 0.1
             sigma_box_size: 0.1

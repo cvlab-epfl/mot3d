@@ -67,10 +67,16 @@ class SingleviewTracker(object):
                 self.access_point = self.access_point[:,:,0]
                 
         def check(self, points):
-            _points = np.int32(points)
+            _points = np.int32(points).reshape(-1,2)
             return self.access_point[_points[:,1], _points[:,0]]>0
         
     def update(self, time_index, detections):
+        
+        # we filter the detections that are on border of the image to avoid having 
+        # lots of false positives when computing the metric.
+        # This step is otherwise not necessary.
+        detections = [list(filter(lambda d: not self.access_points.check(d.position), det_frame)) 
+                      for det_frame in detections]
         
         # --------------------------------
         # compute tracklets for this batch
@@ -188,6 +194,14 @@ def main(config_file="main.config"):
 
     output_file = os.path.join(output_path, "results_{}.pickle".format(os.path.splitext(os.path.basename(config_file))[0]))
     scene.save(output_file)
+    
+    scene.active = {k:utils_traj.smooth_trajectory(x, s=2000, k=2, attr_names=['position','bbox']) 
+                    for k,x in scene.active.items()}
+    scene.completed = {k:utils_traj.smooth_trajectory(x, s=2000, k=2, attr_names=['position','bbox']) 
+                       for k,x in scene.completed.items()}
+    
+    output_file = os.path.join(output_path, "results_smooth_{}.pickle".format(os.path.splitext(os.path.basename(config_file))[0]))
+    scene.save(output_file)    
 
 if __name__ == "__main__":
 
@@ -206,4 +220,4 @@ if __name__ == "__main__":
 
     main(**vars(args))
 
-# python singleview_tracking.py -c config.yaml 
+# python singleview_tracking.py -c config/config_singleview_PETS2009S2L1_View_001.yaml 

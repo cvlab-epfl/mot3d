@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import yaml
 import re
 import os
 import ast
@@ -8,7 +9,8 @@ import glob
 import pickle
 import numpy as np
 
-__all__ = ["json_read", "json_write", "pickle_read", "pickle_write", 
+__all__ = ["json_read", "json_write", "yaml_read", "yaml_write", 
+           "pickle_read", "pickle_write", 
            "mkdir", "sort_nicely", "find_files", "dict_keys_to_string",
            "dict_keys_from_literal_string"]
 
@@ -28,7 +30,19 @@ def json_write(filename, data):
         with open(os.path.abspath(filename), 'w') as f:
             json.dump(data, f, indent=2)
     except:
-        raise ValueError("Unable to write JSON {}".format(filename))   
+        raise ValueError("Unable to write JSON {}".format(filename)) 
+        
+def yaml_read(filename):
+    with open(filename, 'r') as f:
+        data = yaml.load(f)
+    return data
+        
+def yaml_write(filename, data):
+    directory = os.path.dirname(os.path.abspath(filename))
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    with open(os.path.abspath(filename), 'w') as f:
+        yaml.dump(data, f, default_flow_style=False, width=1000)          
         
 def pickle_read(filename):
     with open(filename, "rb") as f:    

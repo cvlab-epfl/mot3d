@@ -1,5 +1,6 @@
 from .mot3d import *
 from .weight_functions import *
+from .distance_functions import *
 from .types import *
 from .utils.vis import *
 from .utils.trajectory import *

@@ -81,7 +81,7 @@ def plot_graph(graph, node_size=100, font_size=12,
             elif isinstance(graph_.nodes[n]['detection'], Detection):
                 positions[n] = graph_.nodes[n]['detection'].position[:2]
             else:
-                raise RuntimeError("Detection object must inherit from Detection or DetectionTracklet!") 
+                raise RuntimeError("Detection object must inherit from Detection or DetectionTracklet not '{}'!".format(type(graph_.nodes[n]['detection']))) 
             ps.append(positions[n])   
     ps = np.array(ps)
 
@@ -117,7 +117,8 @@ def plot_graph(graph, node_size=100, font_size=12,
     plt.legend()  
     
 def plot_trajectories(trajectories, axis=(0,1), linewidth=2, nodesize=7, 
-                      display_time=False, fontsize=8, display_time_every=1, filter_index=None):
+                      display_time=False, fontsize=8, display_time_every=1, 
+                      filter_index=None, calibration=None):
     import matplotlib.pyplot as plt
 
     for track,color in zip(trajectories, colors):
@@ -127,13 +128,13 @@ def plot_trajectories(trajectories, axis=(0,1), linewidth=2, nodesize=7,
         for detection in track:
             
             if isinstance(detection, DetectionTracklet):
-                positions_ = [[d.position[i] for i in axis] for d in detection.tracklet]
+                positions_ = [d.position for d in detection.tracklet]
                 time_ = [d.index for d in detection.tracklet]
             elif isinstance(detection, Detection):
-                positions_ = [[detection.position[i] for i in axis]]
+                positions_ = [detection.position]
                 time_ = [detection.index]
             else:
-                raise RuntimeError("Detection object must inherit from Detection or DetectionTracklet!")            
+                raise RuntimeError("Detection object must inherit from Detection or DetectionTracklet not '{}'!".format(type(detection)))            
             
             if filter_index is None:
                 for p,t in zip(positions_, time_):
@@ -146,7 +147,15 @@ def plot_trajectories(trajectories, axis=(0,1), linewidth=2, nodesize=7,
                         times.append(t) 
 
         if len(positions):
-            positions = np.array(positions)[:,axis]
+            positions = np.array(positions)
+            if calibration is not None and positions.shape[1]==3:
+                K = np.array(calibration['K'])
+                R = np.array(calibration['R'])
+                t = np.array(calibration['t'])
+                dist = np.array(calibration['dist'])
+                positions = cv2.projectPoints(positions, cv2.Rodrigues(R)[0], t, K, dist)[0].reshape(-1,2)  
+            else:
+                positions = positions[:,axis]
             times = np.array(times)
             plt.plot(positions[:,0], positions[:,1], '.-', color=color, linewidth=linewidth, markersize=nodesize)
             if display_time:

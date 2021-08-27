@@ -48,14 +48,15 @@ def build_graph(detections, weight_source_sink=1,
         from tqdm import tqdm
         _tqdm = tqdm
     else:
-        _tqdm = lambda x: x    
-    
-    # sort the detections based on the index
-    compare = lambda a,b: -a.diff_index(b)
-    detections = sorted(detections, key=functools.cmp_to_key(compare))   
+        _tqdm = lambda x: x      
     
     is_with_tracklets = isinstance(detections[0], DetectionTracklet)
     is_with_detections = isinstance(detections[0], Detection)    
+    
+    if is_with_detections:
+        # sort the detections based on the index
+        compare = lambda a,b: -a.diff_index(b)
+        detections = sorted(detections, key=functools.cmp_to_key(compare))     
     
     n_detections = len(detections)
     n_nodes = n_detections*2+2
@@ -118,13 +119,15 @@ def build_graph(detections, weight_source_sink=1,
                             weight = weight_distance(data1['detection'], data2['detection'])
                             if weight is not None:
                                 n_post_pre += 1
-                                g.add_edge(n1, n2, weight=weight) # post-nodes->pre-nodes                            
+                                g.add_edge(n1, n2, weight=weight) # post-nodes->pre-nodes  
+                                #TODO: is calling add_edges from list at the end of this nested loop faster?
 
                         else:
                             # since the detections are sorted by index, when jump<=0 we can
-                            # save the current index of this for loo and then in the next iteration start back from it.
+                            # save the current index of this nested for-loop and then in the next iteration start back from it.
                             # This reduces the time required to build the graph big times.
-                            # For DetectionTracklets cannot be done because tracklets cna overlap so we simply skip this.
+                            # For DetectionTracklets cannot be done because tracklets cannot be sorted as they overlap in time 
+                            # so we simply skip this and execute this nested for-loop normally.
                             
                             if is_with_detections: 
                                 if jump<=0:
@@ -134,6 +137,7 @@ def build_graph(detections, weight_source_sink=1,
 
     if verbose:
         print("Number of post-pre nodes edges created: {}".format(n_post_pre))
+        print("Fraction of edges per detection: {}".format(len(g.edges())/n_detections))
         
     if nx.has_path(g, SOURCE, SINK):
         return g
@@ -152,11 +156,25 @@ def _run_ssp(g, verbose=1, method='muSSP'):
         edges = wrapper.solve(graph_as_text, int(verbose))
     else:
         raise NotImplementedError(method)
+        
+    # muSSP may returns flipped edges. We fix them here
+    edges = [(s,t) if g.has_edge(s,t) else (t,s) for s,t in edges]
 
     g_sub = g.edge_subgraph(edges)
+    
     SOURCE = min(g_sub.nodes())
-    SINK = max(g_sub.nodes())
-    paths = [ track[::2][1:] for track in list(nx.all_simple_paths(g_sub, SOURCE, SINK))]
+    SINK = max(g_sub.nodes()) 
+    
+    count_node_used = 0
+    paths = []
+    for track in list(nx.all_simple_paths(g_sub, SOURCE, SINK)):
+        paths.append(track[::2][1:])
+        if verbose:
+            count_node_used += len(track)-2
+        
+    if verbose:
+        count_nodes = len(g)-2
+        print("[muSSP] {} out of {} nodes unused".format(count_nodes-count_node_used, count_nodes))           
     
     return paths
 
@@ -183,18 +201,9 @@ def solve_graph(g, verbose=True, method='muSSP'):
         raise ValueError("Unrecognazed method '{}'. Choose 'muSSP' or 'ILP'".format(method))
         
     trajectories = []
-    if len(tracks_nodes):
-        
-        is_with_tracklets = isinstance(g.nodes[tracks_nodes[0][0]]['detection'], DetectionTracklet)
-
-        for nodes in tracks_nodes:
-            if is_with_tracklets:
-                tracklets = [g.nodes[n]['detection'].tracklet for n in nodes]
-                trajectory = concat_tracklets(tracklets)
-                trajectories.append(trajectory)
-            else:
-                trajectory = [g.nodes[n]['detection'] for n in nodes]
-                trajectories.append(trajectory)
+    for nodes in tracks_nodes:
+        trajectory = [g.nodes[n]['detection'] for n in nodes]
+        trajectories.append(trajectory)
     
     if verbose:
         print("Graph solved in {:0.4f}s using {}.".format(time.time()-start_time, method))
@@ -202,6 +211,16 @@ def solve_graph(g, verbose=True, method='muSSP'):
     return trajectories
 
 def graph_to_text(g):
+    
+    graph_as_text = [] 
+    graph_as_text.append("p min {} {}".format(len(g), len(g.edges())))
+
+    for s,t,data in g.edges(data=True):
+        graph_as_text.append("a {} {} {:0.7f}".format(s, t, data['weight'])) 
+
+    return graph_as_text
+
+def graph_to_text_nice(g):
     
     graph_as_text = [] 
     graph_as_text.append("p min {} {}".format(len(g), len(g.edges())))

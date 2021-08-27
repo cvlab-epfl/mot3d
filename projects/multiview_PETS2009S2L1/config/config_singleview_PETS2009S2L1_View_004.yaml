@@ -48,6 +48,7 @@ tracking:
             alpha: 0.2
             cutoff_motion: 0.1
             cutoff_appearance: 0.1
+            max_distance: null
             use_color_histogram: true
         weight_confidence:
             mul: 0
