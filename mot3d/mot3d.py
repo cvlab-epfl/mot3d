@@ -1,3 +1,7 @@
+#----------------------------------------------------------------------------
+# Created By  : Leonardo Citraro leonardo.citraro@epfl.ch
+# Date: 2021
+# ---------------------------------------------------------------------------
 import numpy as np
 import networkx as nx
 import time

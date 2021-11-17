@@ -1,3 +1,7 @@
+#----------------------------------------------------------------------------
+# Created By  : Leonardo Citraro leonardo.citraro@epfl.ch
+# Date: 2021
+# ---------------------------------------------------------------------------
 import networkx as nx
 from pulp import *
 import time

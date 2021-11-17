@@ -1,3 +1,7 @@
+#----------------------------------------------------------------------------
+# Created By  : Leonardo Citraro leonardo.citraro@epfl.ch
+# Date: 2021
+# ---------------------------------------------------------------------------
 import numpy as np
 
 def merge_close_points(points, eps=0.3, return_indexes=False):

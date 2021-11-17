@@ -1,3 +1,7 @@
+#----------------------------------------------------------------------------
+# Created By  : Leonardo Citraro leonardo.citraro@epfl.ch
+# Date: 2021
+# ---------------------------------------------------------------------------
 import numpy as np
 import cv2
 from . import distance_functions as df

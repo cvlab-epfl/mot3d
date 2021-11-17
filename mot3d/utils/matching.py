@@ -1,3 +1,7 @@
+#----------------------------------------------------------------------------
+# Created By  : Leonardo Citraro leonardo.citraro@epfl.ch
+# Date: 2021
+# ---------------------------------------------------------------------------
 import numpy as np
 
 def hungarian_matching(pos1, pos2, radius_match=0.3):
