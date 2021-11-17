@@ -1,3 +1,7 @@
+#----------------------------------------------------------------------------
+# Created By  : Leonardo Citraro leonardo.citraro@epfl.ch
+# Date: 2021
+# ---------------------------------------------------------------------------
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -85,7 +89,7 @@ if __name__=="__main__":
         
     detections_tracklets = [mot3d.DetectionTracklet2D(tracklet) for tracklet in tracklets]
     
-    weight_distance_t = lambda t1, t2: wf.weight_distance_trackelts_2d(t1, t2, max_distance=None,
+    weight_distance_t = lambda t1, t2: wf.weight_distance_tracklets_2d(t1, t2, max_distance=None,
                                                                        sigma_color_histogram=0.3, sigma_motion=50, alpha=0.7,
                                                                        cutoff_motion=0.1, cutoff_appearance=0.1,
                                                                        use_color_histogram=True)

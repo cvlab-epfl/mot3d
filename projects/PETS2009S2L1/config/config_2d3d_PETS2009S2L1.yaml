@@ -1,0 +1,48 @@
+output_path: "./output_multiview_2d3d"
+
+views_2d3d:
+    - 'View_001'
+    - 'View_003'
+    
+views:
+    - 'View_001'
+    - 'View_003'
+    - 'View_004'
+    - 'View_005'
+    - 'View_006'
+    - 'View_007'
+    - 'View_008'
+configs:
+    View_001: "./config/config_singleview_PETS2009S2L1_View_001.yaml"
+    View_003: "./config/config_singleview_PETS2009S2L1_View_003.yaml"
+    View_004: "./config/config_singleview_PETS2009S2L1_View_004.yaml"
+    View_005: "./config/config_singleview_PETS2009S2L1_View_005.yaml"
+    View_006: "./config/config_singleview_PETS2009S2L1_View_006.yaml"
+    View_007: "./config/config_singleview_PETS2009S2L1_View_007.yaml"
+    View_008: "./config/config_singleview_PETS2009S2L1_View_008.yaml"
+    3D: "./config/config_multiview_PETS2009S2L1.yaml"
+    
+feeder: 
+    name: 'FeederPETS2009S2L1'
+    FeederPETS2009S2L1:
+        start: 0
+        end: 794
+        object_class: 'pedestrian'
+        th_score: 0.5
+        histograms:
+            enable: true
+            bins: 255
+            channels: [0,1,2]
+        bboxes:
+            enable: true
+    FeederPETS2009S2L1_test:
+        start: 0
+        end: 794
+        object_class: 'pedestrian'
+        th_score: 0.5
+        histograms:
+            enable: true
+            bins: 255
+            channels: [0,1,2]
+        bboxes:
+            enable: true

@@ -1,3 +1,7 @@
+#----------------------------------------------------------------------------
+# Created By  : Leonardo Citraro leonardo.citraro@epfl.ch
+# Date: 2021
+# ---------------------------------------------------------------------------
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -7,6 +11,7 @@ import os
 import mot3d
 from mot3d.utils import utils
 import mot3d.utils.filt
+from mot3d.utils import trajectory as utils_traj
 import mot3d.weight_functions as wf
 
 if __name__=="__main__":
@@ -75,7 +80,7 @@ if __name__=="__main__":
         
     detections_tracklets = [mot3d.DetectionTracklet3D(tracklet) for tracklet in tracklets]
     
-    weight_distance_t = lambda t1, t2: wf.weight_distance_trackelts_3d(t1, t2, 
+    weight_distance_t = lambda t1, t2: wf.weight_distance_tracklets_3d(t1, t2, 
                                                                        sigma_color_histogram=0.3, sigma_motion=3, alpha=0.7,
                                                                        cutoff_motion=0.1, cutoff_appearance=0.1,
                                                                        max_distance=None,
@@ -95,6 +100,8 @@ if __name__=="__main__":
     print("-"*30)
     trajectories = mot3d.solve_graph(g, verbose=True, method='muSSP')   
     
+    # we have to concatenate the detections in each tracklet before interpolate!
+    trajectories = [utils_traj.concat_tracklets([dt.tracklet for dt in traj]) for traj in trajectories]
     trajectories = list(map(lambda x: mot3d.interpolate_trajectory(x, attr_names=['position']), trajectories))    
 
     plt.figure()

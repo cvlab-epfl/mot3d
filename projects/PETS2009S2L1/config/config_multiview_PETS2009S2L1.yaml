@@ -1,0 +1,82 @@
+output_path: "./output_multiview"
+
+views:
+    - 'View_001'
+    - 'View_003'
+    - 'View_004'
+    - 'View_005'
+    - 'View_006'
+    - 'View_007'
+    - 'View_008'
+configs:
+    View_001: "./config/config_singleview_PETS2009S2L1_View_001.yaml"
+    View_003: "./config/config_singleview_PETS2009S2L1_View_003.yaml"
+    View_004: "./config/config_singleview_PETS2009S2L1_View_004.yaml"
+    View_005: "./config/config_singleview_PETS2009S2L1_View_005.yaml"
+    View_006: "./config/config_singleview_PETS2009S2L1_View_006.yaml"
+    View_007: "./config/config_singleview_PETS2009S2L1_View_007.yaml"
+    View_008: "./config/config_singleview_PETS2009S2L1_View_008.yaml"
+
+feeder: 
+    name: 'FeederPETS2009S2L1'
+    FeederPETS2009S2L1:
+        start: 0
+        end: 794
+        object_class: 'pedestrian'
+        th_score: 0.5
+        histograms:
+            enable: true
+            bins: 255
+            channels: [0,1,2]
+        bboxes:
+            enable: true
+    
+calibration: "/cvlabdata2/home/citraro/code/mot3d/projects/PETS2009S2L1/calibration.json"
+valid_regions: "/cvlabdata2/home/citraro/code/mot3d/projects/PETS2009S2L1/valid_region/manual/valid_regions.json"
+    
+matching:
+    threads: 24
+    max_distance: 12
+    distance_none: 25
+    n_candidates: 3
+    n_min_views_clique: 3
+    verbose: false
+    
+tracking:
+    batch_size: 50
+    
+    # a trajectory is considered completed if it has not been updated for this time/frames
+    completed_after: 30
+
+    detections:
+        weight_source_sink: 5
+        max_jump: 4
+        verbose: false
+        weight_distance:       
+            sigma_distance: 500
+            sigma_jump: 2
+            sigma_color_histogram: 0.1
+            sigma_box_size: 0.1
+            max_distance: 750
+            use_color_histogram: false
+            use_bbox: false
+        weight_confidence:
+            mul: 0
+            bias: 0
+
+    tracklets: 
+        weight_source_sink: 0.1
+        max_jump: 20
+        length_endpoints: 5
+        verbose: false
+        weight_distance:
+            sigma_color_histogram: 0.3
+            sigma_motion: 1500
+            alpha: 0.1
+            cutoff_motion: 0.1
+            cutoff_appearance: 0.1
+            use_color_histogram: true
+        weight_confidence:
+            mul: 0
+            # if it is not bigger than weight_source_sink you may lose tracklets
+            bias: 0.11    

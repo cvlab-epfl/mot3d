@@ -1,0 +1,55 @@
+output_path: "./output"
+
+feeder: 
+    name: 'FeederPETS2009S2L1'
+    FeederPETS2009S2L1:
+        start: 0
+        end: 794
+        object_class: 'pedestrian'
+        th_score: 0.75
+        histograms:
+            enable: true
+            bins: 255
+            channels: [0,1,2]
+        bboxes:
+            enable: true
+
+tracking:
+    batch_size: 50
+    
+    # a trajectory is considered completed if it has not been updated for this time/frames
+    completed_after: 30
+    valid_region: "./valid_region/views/valid_region_PETS2009S2L1_View_005.png"
+
+    detections:
+        weight_source_sink: 1
+        max_jump: 4
+        verbose: true
+        weight_distance:       
+            sigma_distance: 10
+            sigma_jump: 4
+            sigma_color_histogram: 0.1
+            sigma_box_size: 0.1
+            max_distance: 30 
+            use_color_histogram: true
+            use_bbox: true
+        weight_confidence:
+            mul: 0
+            bias: 0
+
+    tracklets: 
+        weight_source_sink: 0.1
+        max_jump: 40
+        length_endpoints: 5
+        verbose: true
+        weight_distance:
+            sigma_color_histogram: 0.3
+            sigma_motion: 100
+            alpha: 0.2
+            cutoff_motion: 0.1
+            cutoff_appearance: 0.1
+            use_color_histogram: true
+        weight_confidence:
+            mul: 0
+            # if it is not bigger than weight_source_sink you may lose tracklets
+            bias: 0.11
