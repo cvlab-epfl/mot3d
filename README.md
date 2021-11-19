@@ -4,10 +4,10 @@ This package provides all the necessary routines to create and solve minimum cos
 In the projects folder we provide solutions for single view and multiple view online multi-object tracking for the PETS2009 sequence.
 
 #### Solvers:
--- Integer Linear Programming (ILP) [Slow]
--- Minimum-update Successive Shortest Path (muSSP) [Very Fast] https://github.com/yu-lab-vt/muSSP
+- Integer Linear Programming (ILP) [Slow]
+- Minimum-update Successive Shortest Path (muSSP) [Very Fast] https://github.com/yu-lab-vt/muSSP
 
-Big thanks to authors of muSSP for releasing the code. Please cite their paper if you find it useful:
+Big thanks to authors of muSSP solver for releasing the code. Please cite their paper if you find it useful:
 ```
 @inproceedings{wang2019mussp,
   title={muSSP: Efficient Min-cost Flow Algorithm for Multi-object Tracking},
