@@ -174,7 +174,8 @@ def plot_trajectories(trajectories, axis=(0,1), linewidth=2, nodesize=7,
         
 def visualisation(filenames, tracks, indexes, calibration=None, bboxes=None, 
                   crop=(slice(None,None), slice(None,None)), trace_length=25, thickness=5, thickness_boxes=2,
-                  output_path="./output/sequence1", output_video="sequence1.mp4", fps=25):
+                  output_path="./output/sequence1", output_video="sequence1.mp4", fps=25,
+                  img_preprocessing=None):
     
     """
     Save all frames of a view with overlayed trajectories.
@@ -216,8 +217,11 @@ def visualisation(filenames, tracks, indexes, calibration=None, bboxes=None,
 
         basename = os.path.basename(filename)
         img = imageio.imread(filename)
+        
+        if img_preprocessing is not None:
+            img = img_preprocessing(img)
 
-        for track,index,color in zip(tracks, indexes, colors):
+        for j,(track,index,color) in enumerate(zip(tracks, indexes, colors)):
             
             if i in index:
 
@@ -242,9 +246,10 @@ def visualisation(filenames, tracks, indexes, calibration=None, bboxes=None,
 
                 img = cv2.circle(img, tuple(track[ii]), radius=thickness, color=color, thickness=-1)
                 
-        if bboxes is not None:
-            for xmin, ymin, xmax, ymax in bboxes[i]:
-                img = cv2.rectangle(img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=[255,0,0], thickness=thickness_boxes)
+                if bboxes is not None:
+                    if bboxes[j][ii] is not None:
+                        xmin, ymin, xmax, ymax = bboxes[j][ii]
+                        img = cv2.rectangle(img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=color, thickness=thickness_boxes)
 
         imageio.imwrite(os.path.join(output_path, basename), img[crop]) 
         
