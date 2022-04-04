@@ -170,7 +170,7 @@ def plot_trajectories(trajectories, axis=(0,1), linewidth=2, nodesize=7,
                 for (x,y),time in zip(positions[[-1]], times[[-1]]):
                     plt.text(x,y, str(time), color=color, fontsize=fontsize, 
                              bbox={'facecolor': 'grey', 'alpha': 0.8, 'pad': 1})
-    plt.grid()   
+    plt.grid()
         
 def visualisation(filenames, tracks, indexes, calibration=None, bboxes=None, 
                   crop=(slice(None,None), slice(None,None)), trace_length=25, thickness=5, thickness_boxes=2,
@@ -219,7 +219,7 @@ def visualisation(filenames, tracks, indexes, calibration=None, bboxes=None,
         img = imageio.imread(filename)
         
         if img_preprocessing is not None:
-            img = img_preprocessing(img)
+            img = img_preprocessing(img, i)
 
         for j,(track,index,color) in enumerate(zip(tracks, indexes, colors)):
             
