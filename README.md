@@ -23,8 +23,15 @@ Big thanks to authors of muSSP solver for releasing the code. Please cite their 
 export PYTHONPATH="...parent folder.../mot3d:$PYTHONPATH"
 ```
 #### Build muSSP
-1. `unzip mussp-master-6cf61b8.zip`
-2. `cd ./mot3d/mot3d/solvers/wrappers/muSSP; ./cmake_and_build.sh`
+```
+sudo apt-get update
+sudo apt-get install unzip cmake build-essential libboost-python-dev
+cd ..../mot3d
+pip install -r requirements.txt
+unzip mussp-master-6cf61b8.zip
+cd ..../mot3d/mot3d/solvers/wrappers/muSSP
+./cmake_and_build.sh
+```
 
 ## Usage
 Check the examples!
