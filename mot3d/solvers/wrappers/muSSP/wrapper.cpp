@@ -22,6 +22,9 @@
     DEALINGS IN THE SOFTWARE.
     ==========================================================================================
 */
+#ifndef BOOST_PYTHON_STATIC_LIB
+#define BOOST_PYTHON_STATIC_LIB
+#endif
 #include <Python.h>
 #include <boost/python.hpp>
 #include <algorithm>
