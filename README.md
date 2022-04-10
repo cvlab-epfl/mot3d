@@ -41,16 +41,16 @@ pip install -r requirements.txt
 ```
 decompress mussp-master-6cf61b8.zip in the same location. The folder must be named `muSSP-master` and containing `muSSP`, `SSP`, `FolowMe` and so on.
 
-###### Installing Boost.Python for in Windows
+###### Installing Boost.Python for Windows
 Download boost https://www.boost.org/users/download/
-unzip it then run `.\bootstrap.bat` from command line
-If you have an error of such as `'"cl"' is not recognized as an internal or external command` you probably have to install Visual Studio https://visualstudio.microsoft.com/it/downloads/ Make sure to install MSVC compiler and Windows SDK by ticking on Individual Components->Compilers/build-tools->MSVC 143 C++ x86_x64 (Latest) and Windows SDK 11
+unzip it then run `.\bootstrap.bat` from command line.
+If you have an error such as `'"cl"' is not recognized as an internal or external command` you probably have to install Visual Studio https://visualstudio.microsoft.com/it/downloads/. Make sure to install MSVC compiler and Windows SDK by ticking on Individual Components->Compilers/build-tools->MSVC 143 C++ x86_x64 (Latest) and Windows SDK 11
 If there is another error about missing header files you are probably missing Windows SDK.
 ```
 .\b2 -j12 --with-python --prefix=C:\Boost --libdir=C:\Boost\lib --includedir=C:\Boost\include install
 ```
 if the installation went well, you should have this library `C:\Boost\lib\libboost_python3*.lib` and this folder `C:\Boost\include`
-###### Compiling muSSP C++ code
+###### Compiling muSSP C++ wrapper code
 ```
 cd ..../mot3d/mot3d/solvers/wrappers/muSSP
 rmdir /s build      :: Always a good idea to delete/clean the build folder if it exist already
