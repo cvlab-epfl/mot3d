@@ -62,7 +62,7 @@ cmake -DBOOST_ROOT=C:\\Boost -DBOOST_PYTHON_STATIC_LIB=ON ..
 At this point, if no errors, open the file `wrapper.sln` with Visual Studio, then set Release mode then press Build Solution.
 If no errors, `========== Build: 2 succeeded, 0 failed`, you should have this file `release/wrapper.pyd`. Copy it in the parent folder of `build` where there is the file `wrapper.cpp`.
 ```
-cp ./release/wrapper.pyd ..
+copy ./release/wrapper.pyd ..
 ```
 Installation done!
 
