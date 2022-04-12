@@ -60,7 +60,9 @@ cd build
 cmake -DBOOST_ROOT=C:\\Boost -DBOOST_PYTHON_STATIC_LIB=ON ..
 ```
 At this point, if no errors, open the file `wrapper.sln` with Visual Studio, then set Release mode then press Build Solution.
-If no errors, `========== Build: 2 succeeded, 0 failed`, you should have this file `release/wrapper.pyd`. Copy it in the parent folder of `build` where there is the file `wrapper.cpp`.
+If no errors, you should see `========== Build: 2 succeeded, 0 failed`. If you have an error such as `Missing dependency Graph.h file` you have a problem with the unzipping of the mussp-master.zip. Once fixed you have to re-do cmake command as well.
+
+At this point you should have this file `build/Release/wrapper.pyd`. Copy it in the parent folder of `build` where there is the file `wrapper.cpp`.
 ```
 copy ./release/wrapper.pyd ..
 ```

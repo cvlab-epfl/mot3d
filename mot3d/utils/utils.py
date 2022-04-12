@@ -38,7 +38,7 @@ def json_write(filename, data):
         
 def yaml_read(filename):
     with open(filename, 'r') as f:
-        data = yaml.load(f)
+        data = yaml.safe_load(f)
     return data
         
 def yaml_write(filename, data):

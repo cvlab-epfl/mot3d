@@ -242,9 +242,9 @@ def visualisation(filenames, tracks, indexes, calibration=None, bboxes=None,
 
                 t_init = np.maximum(ii-trace_length+1,0)
                 for t0,t1 in zip(track[t_init:ii], track[t_init+1:ii+1]):
-                    img = cv2.line(img, tuple(t0), tuple(t1), color=color, thickness=max(1, int(thickness*0.5)))
+                    img = cv2.line(img, tuple(map(int,t0)), tuple(map(int,t1)), color=color, thickness=max(1, int(thickness*0.5)))
 
-                img = cv2.circle(img, tuple(track[ii]), radius=thickness, color=color, thickness=-1)
+                img = cv2.circle(img, tuple(map(int,track[ii])), radius=thickness, color=color, thickness=-1)
                 
                 if bboxes is not None:
                     if bboxes[j][ii] is not None:
