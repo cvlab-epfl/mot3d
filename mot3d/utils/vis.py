@@ -255,8 +255,19 @@ def visualisation(filenames, tracks, indexes, calibration=None, bboxes=None,
         
     if isinstance(output_video, str):
         ext = basename.split('.')[-1]
-        cmd="ffmpeg -framerate {} -pattern_type glob -i '{}/*.{}' -pix_fmt yuv420p -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -movflags +faststart -preset slow -profile:v baseline -vcodec h264 {} -y".format(fps, output_path, ext, output_video)
+        
+        if os.name == 'nt': #For Windows OS
+            import glob
+            filenames = glob.glob(os.path.join(output_path, "*."+ext))
+            with open("ffmpeg_input.txt", "wb") as outfile:
+                for filename in filenames:
+                    outfile.write(f"file '{os.path.abspath(filename)}'\n".encode())
+
+            cmd="ffmpeg -r {} -f concat -safe 0 -i \"ffmpeg_input.txt\" -pix_fmt yuv420p -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -movflags +faststart -preset slow -profile:v baseline -vcodec h264 {} -y".format(fps, output_video)
+        else:
+            cmd="ffmpeg -framerate {} -pattern_type glob -i '{}/*.{}' -pix_fmt yuv420p -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -movflags +faststart -preset slow -profile:v baseline -vcodec h264 {} -y".format(fps, output_path, ext, output_video)
+        
         print(cmd)
         out = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, shell=True)
         for line in out.stdout:
-            print(line.strip())  
+            print(line.strip())
