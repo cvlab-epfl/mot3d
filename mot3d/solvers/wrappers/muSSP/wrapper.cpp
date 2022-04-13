@@ -40,8 +40,9 @@ Graph* init(p::list graph_as_text, int verbose) {
     int n, m; ////no of nodes, no of arcs;
     char pr_type[3]; ////problem type;
     int tail, head;
-    double weight;
-    double en_weight, ex_weight;
+    double weight=0;
+    double en_weight=0;
+    double ex_weight=0;
 
     vector<int> edge_tails, edge_heads;
     vector<double> edge_weights;
@@ -85,15 +86,15 @@ Graph* init(p::list graph_as_text, int verbose) {
         cout <<"Parsing done!"<<endl;
     return resG;
 }
-
+/* there is still an issue with this 
 p::list make_output(Graph* resG, vector<vector<int>> path_set, double cost_sum) {
-    /* for some reason path_set doesn't contain the actual (final) shortest paths.
-    It contains the information of which edge is active in the graph instead.
-    This function outputs these edges.
-    !! some edges may be flipped !!
-    The next step would be to extract the subgraph composed of only active edges and then compute all paths
-    connecting source to sink. (this is done in the python code)
-    */
+    //r some reason path_set doesn't contain the actual (final) shortest paths.
+    //It contains the information of which edge is active in the graph instead.
+    //This function outputs these edges.
+    //!! some edges may be flipped !!
+    //The next step would be to extract the subgraph composed of only active edges and then compute all paths
+    //connecting source to sink. (this is done in the python code)
+    
     int i, j;
     int tail, head, edge_id;
     std::unordered_map<size_t, int> m;
@@ -119,13 +120,48 @@ p::list make_output(Graph* resG, vector<vector<int>> path_set, double cost_sum) 
     p::list edges;
     for (i = 0; i < path_set.size(); i++) {
         for (j = path_set[i].size() - 1; j>0; j--) {
-            head = path_set[i][j];
-            tail = path_set[i][j - 1];  
+            //head = path_set[i][j];
+            //tail = path_set[i][j - 1]; 
+            head = path_set[i][j-1];
+            tail = path_set[i][j];
             
             edge_id = m[node_key(tail, head)];
             if (edge_visited[edge_id]) {
-                edges.append(p::make_tuple(tail+1, head+1));
+                //edges.append(p::make_tuple(tail+1, head+1));
+                edges.append(p::make_tuple(head+1, tail+1));
             }
+        }
+    }
+            
+    return edges;
+}
+*/
+p::list make_output2(Graph* resG, vector<vector<int>> path_set, double cost_sum) {
+    // this requires that the flag in muSSP-master/muSSP/Graph.cpp Graph::add_edge is set to true!
+
+    int i, j;
+    int tail, head, edge_id;
+    
+    std::vector<bool> edge_visited_flag(resG->num_edges_); 
+
+    for (i = 0; i < path_set.size(); i++) {
+        for (j = 0; j < path_set[i].size() - 1; j++) {
+            head = path_set[i][j];
+            tail = path_set[i][j + 1];
+            
+            int edge_idx = resG->node_id2edge_id[Graph::node_key(tail, head)];
+            edge_visited_flag[edge_idx] = !edge_visited_flag[edge_idx];
+        }
+    }
+    
+    p::list edges;
+    for (int i = 0; i < resG->num_edges_; i++) {
+        if (edge_visited_flag[i]){
+            
+            head = resG->edge_tail_head[i].first;
+            tail = resG->edge_tail_head[i].second;
+            
+            edges.append(p::make_tuple(head+1, tail+1));
         }
     }
             
@@ -277,7 +313,7 @@ p::list solve(p::list graph_as_text, int verbose) {
         printf("The number of paths: %ld, total cost is %.7f, final path cost is: %.7f. #path_set %ld\n",
                path_cost.size(), cost_sum, path_cost[path_cost.size() - 1], path_set.size());
 
-    return make_output(org_graph.get(), path_set, cost_sum);
+    return make_output2(org_graph.get(), path_set, cost_sum);
 }
 
 BOOST_PYTHON_MODULE(wrapper) {

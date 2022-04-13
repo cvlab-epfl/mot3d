@@ -2,6 +2,7 @@
 # Created By  : Leonardo Citraro leonardo.citraro@epfl.ch
 # Date: 2021
 # ---------------------------------------------------------------------------
+import os
 import numpy as np
 import networkx as nx
 import time
@@ -162,7 +163,7 @@ def _run_ssp(g, verbose=1, method='muSSP'):
         raise NotImplementedError(method)
         
     # muSSP may returns flipped edges. We fix them here
-    edges = [(s,t) if g.has_edge(s,t) else (t,s) for s,t in edges]
+    edges = [(s,t) if g.has_edge(s,t) else (t,s) for (s,t) in edges]
 
     g_sub = g.edge_subgraph(edges)
     
@@ -253,7 +254,10 @@ def graph_to_text_nice(g):
     
 def save_graph(graph_as_text, filename="/tmp/graph.txt"):
     
-    fd = os.open(filename, os.O_RDWR|os.O_CREAT|os.O_SYNC|os.O_TRUNC) 
+    flags = os.O_RDWR|os.O_CREAT|os.O_TRUNC
+    if os.name != "nt":
+        flags |= os.O_SYNC
+    fd = os.open(filename, flags)
     
     for string in graph_as_text:
         os.write(fd, str.encode(string+"\n"))    
